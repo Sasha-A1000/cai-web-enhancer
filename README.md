@@ -137,6 +137,10 @@ cai-web-enhancer/
 └── LICENSE-RU.md
 ```
 
+## Install
+
+[Install latest version](https://raw.githubusercontent.com/Sasha-A1000/cai-web-enhancer/main/cai-web-enhancer.user.js)
+
 ## Disclaimer
 
 Use the userscript at your own risk.
