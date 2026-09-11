@@ -67,7 +67,7 @@ Install the Tampermonkey extension for your browser.
 
 ### 2. Install C.AI Web Enhancer
 
-#### Direct install
+#### One-click install
 
 [Install latest version](https://raw.githubusercontent.com/Sasha-A1000/cai-web-enhancer/main/cai-web-enhancer.user.js)
 
