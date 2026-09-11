@@ -67,11 +67,15 @@ Install the Tampermonkey extension for your browser.
 
 ### 2. Install C.AI Web Enhancer
 
-Open the latest `.user.js` release from this repository.
+#### Direct install
 
-Tampermonkey should recognize it as a userscript and offer to install it.
+[Install latest version](https://raw.githubusercontent.com/Sasha-A1000/cai-web-enhancer/main/cai-web-enhancer.user.js)
 
-You can also install the script directly from the repository's **Raw** file.
+Tampermonkey should automatically detect the userscript and offer to install it.
+
+#### Manual install
+
+You can also open the latest `.user.js` file from this repository and install it manually through Tampermonkey.
 
 ### 3. Open Character.AI
 
@@ -136,10 +140,6 @@ cai-web-enhancer/
 ├── LICENSE
 └── LICENSE-RU.md
 ```
-
-## Install
-
-[Install latest version](https://raw.githubusercontent.com/Sasha-A1000/cai-web-enhancer/main/cai-web-enhancer.user.js)
 
 ## Disclaimer
 
