@@ -1206,7 +1206,7 @@
             scheduleStaleWarningPosition();
             return;
         }
-        caiLog('Показано неблокирующее уведомление рассинхронизации вкладок', 'warn');
+        caiLog('Показано уведомление рассинхронизации вкладок', 'warn');
         const modal = document.createElement('div');
         modal.id = 'cai-stale-modal';
 
