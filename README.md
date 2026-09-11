@@ -134,8 +134,7 @@ cai-web-enhancer/
 ├── README.md
 ├── README-RU.md
 ├── LICENSE
-├── LICENSE-RU.md
-└── screenshots/
+└── LICENSE-RU.md
 ```
 
 ## Disclaimer
