@@ -128,6 +128,7 @@ You are welcome to:
 This project is licensed under the MIT License.
 
 [📄 MIT License — English](LICENSE)
+
 [🇷🇺 MIT License — Русский перевод](LICENSE-RU.md)
 
 ## Repository structure
