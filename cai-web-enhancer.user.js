@@ -1627,17 +1627,17 @@
 
             const headerTitle = document.createElement('span');
             headerTitle.className = 'pl-1 text-tiny text-foreground-500 font-bold';
-            headerTitle.textContent = '(Архив)';
+            headerTitle.textContent = t('archive');
 
             const controlsDiv = document.createElement('div');
 
             const btnExport = document.createElement('button');
-            btnExport.textContent = '⬇️ Save';
+            btnExport.textContent = t('save');
             btnExport.className = 'cai-btn';
             btnExport.onclick = () => doExport(true);
 
             const btnImport = document.createElement('button');
-            btnImport.textContent = '⬆️ Load';
+            btnImport.textContent = t('load');
             btnImport.className = 'cai-btn';
             btnImport.onclick = () => doImport(true);
 
@@ -1746,13 +1746,13 @@
 
             const titleSettings = document.createElement('div');
             titleSettings.className = 'cai-settings-title';
-            titleSettings.textContent = '(Настройки)';
+            titleSettings.textContent = t('settings');
 
             // --- Визуализация разделов ---
             const isVisual = getData(KEY_SETTING_VISUAL);
             const lblVisual = document.createElement('label');
             lblVisual.className = 'cai-toggle';
-            lblVisual.innerHTML = `<input type="checkbox" ${isVisual ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>(Визуализация разделов)</span>`;
+            lblVisual.innerHTML = `<input type="checkbox" ${isVisual ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>${t('visual')}</span>`;
 
             const legendDiv = document.createElement('div');
             legendDiv.className = 'cai-legend';
@@ -1777,32 +1777,32 @@
             const isNetIntercept = getData(KEY_SETTING_NET_INTERCEPT);
             const lblNet = document.createElement('label');
             lblNet.className = 'cai-toggle';
-            lblNet.innerHTML = `<input type="checkbox" ${isNetIntercept ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>(Перехват сети fetch/XHR)</span>`;
+            lblNet.innerHTML = `<input type="checkbox" ${isNetIntercept ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>${t('network')}</span>`;
 
             // --- Автосканирование DOM ---
             const isAutoScan = getData(KEY_SETTING_AUTO_SCAN);
             const lblAutoScan = document.createElement('label');
             lblAutoScan.className = 'cai-toggle';
-            lblAutoScan.innerHTML = `<input type="checkbox" ${isAutoScan ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>(DOM-сканирование fallback)</span>`;
+            lblAutoScan.innerHTML = `<input type="checkbox" ${isAutoScan ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>${t('autoscan')}</span>`;
 
             // --- Режим разработчика ---
             const isDevMode = getData(KEY_SETTING_DEV);
             const lblDev = document.createElement('label');
             lblDev.className = 'cai-toggle';
-            lblDev.innerHTML = `<input type="checkbox" ${isDevMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Режим разработчика)</span>`;
+            lblDev.innerHTML = `<input type="checkbox" ${isDevMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>${t('developer')}</span>`;
 
             const devWarningDiv = document.createElement('div');
             devWarningDiv.className = 'cai-dev-warning';
             devWarningDiv.style.display = isDevMode ? 'block' : 'none';
             devWarningDiv.innerHTML = `
-                <span class="cai-dev-warning-title">⚠️ Используйте осторожно!</span>
-                Этот режим отключает защитные механизмы синхронизации.
+                <span class="cai-dev-warning-title">⚠️ ${currentLanguage() === 'en' ? 'Use with caution!' : 'Используйте осторожно!'}</span>
+                ${currentLanguage() === 'en' ? 'This mode disables synchronization safeguards.' : 'Этот режим отключает защитные механизмы синхронизации.'}
                 <ul class="cai-dev-list" style="list-style: none; padding: 0; margin: 0;">
-                    <li>– Экспорт/Импорт через верхние кнопки не сбрасывает счётчики</li>
-                    <li>– Можно отключить визуализацию даже при 50+ новых чатах</li>
-                    <li>– Тестирование архива без влияния на дельту-счётчики</li>
-                    <li>– Нумерация порядка позиций на чатах</li>
-                    <li>– Риск рассинхронизации между устройствами при неправильном использовании</li>
+                    <li>– ${currentLanguage() === 'en' ? 'Export/Import from the top buttons does not reset counters' : 'Экспорт/Импорт через верхние кнопки не сбрасывает счётчики'}</li>
+                    <li>– ${currentLanguage() === 'en' ? 'Visualization can be disabled even with 50+ new chats' : 'Можно отключить визуализацию даже при 50+ новых чатах'}</li>
+                    <li>– ${currentLanguage() === 'en' ? 'Test the archive without affecting delta counters' : 'Тестирование архива без влияния на дельта-счётчики'}</li>
+                    <li>– ${currentLanguage() === 'en' ? 'Show position numbers on chats' : 'Нумерация порядка позиций на чатах'}</li>
+                    <li>– ${currentLanguage() === 'en' ? 'Risk of device synchronization issues if misused' : 'Риск рассинхронизации между устройствами при неправильном использовании'}</li>
                 </ul>
             `;
 
@@ -1813,7 +1813,7 @@
             lblDebug.style.marginTop = '10px';
             lblDebug.style.borderTop = '1px solid rgba(255,255,255,0.1)';
             lblDebug.style.paddingTop = '10px';
-            lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Консоль логов)</span>`;
+            lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>${t('debug')}</span>`;
 
             // Переключатель языка находится первым в настройках: он всегда доступен
             // и сам переводится после переключения.
