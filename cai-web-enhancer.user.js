@@ -36,32 +36,6 @@
     const KEY_SETTING_AUTO_SCAN = 'cai_setting_auto_scan_v1';
     const KEY_NET_CACHE = 'cai_net_cache_v1';
     const KEY_SETTING_ADBLOCK = 'cai_setting_adblock_v1';
-    const KEY_LANGUAGE = 'cai_setting_language_v1';
-
-    // All user-facing labels are kept in one small dictionary so the archive can
-    // be switched without changing its behaviour or stored archive data.
-    const I18N = {
-        ru: {
-            archive: '(Архив)', save: '⬇️ Сохранить', load: '⬆️ Загрузить', reset: 'Сброс',
-            settings: '(Настройки)', language: '(Язык)', english: 'ENG', russian: 'RUS',
-            visual: '(Визуализация разделов)', adblock: '(Скрыть рекламу)', network: '(Перехват сети fetch/XHR)',
-            autoscan: '(DOM-сканирование fallback)', developer: '(Режим разработчика)', debug: '(Консоль логов)',
-            empty: 'Пусто', chats: 'Чатов в архиве', added: '(Было добавлено чатов)', simultaneous: '(Одновременно:', since: '(С последнего момента:',
-            newChats: 'Новые чаты', oldChats: 'Старые чаты', hidden: 'Скрытые (опасные)', boundary: 'Граница новых/старых',
-            debugLog: '(Фоновый лог действий)', clear: 'Очистить'
-        },
-        en: {
-            archive: '(Archive)', save: '⬇️ Save', load: '⬆️ Load', reset: 'Reset',
-            settings: '(Settings)', language: '(Language)', english: 'ENG', russian: 'RUS',
-            visual: '(Section visualization)', adblock: '(Hide ads)', network: '(Network interception fetch/XHR)',
-            autoscan: '(DOM scanning fallback)', developer: '(Developer mode)', debug: '(Log console)',
-            empty: 'Empty', chats: 'Chats in archive', added: '(Chats added)', simultaneous: '(At once:', since: '(Since last export:',
-            newChats: 'New chats', oldChats: 'Old chats', hidden: 'Hidden (dangerous)', boundary: 'New/old boundary',
-            debugLog: '(Background action log)', clear: 'Clear'
-        }
-    };
-    function currentLanguage() { return getData(KEY_LANGUAGE) === 'en' ? 'en' : 'ru'; }
-    function t(key) { return I18N[currentLanguage()][key] || I18N.ru[key] || key; }
 
     let lastManualDeleteTime = 0;
     let isDomStale = false;
@@ -122,8 +96,8 @@
 
         consoleEl.innerHTML = `
             <div class="cai-debug-header" style="padding: 4px 8px; background: #27272a; border-bottom: 1px solid #52525b; font-weight: bold; color: #fff; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <span>${t('debugLog')}</span>
-                <button id="cai-debug-clear" style="background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px;">${t('clear')}</button>
+                <span>(Фоновый лог действий)</span>
+                <button id="cai-debug-clear" style="background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px;">Очистить</button>
             </div>
             <div class="cai-debug-messages" id="cai-debug-messages" style="flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; pointer-events: auto;"></div>
         `;
@@ -146,14 +120,7 @@
         consoleEl.style.display = (isDev && isDebug) ? 'flex' : 'none';
     }
 
-    function localizeLog(msg) {
-        if (currentLanguage() !== 'en') return msg;
-        const pairs = [['Установка перехвата fetch и XMLHttpRequest...', 'Installing fetch and XMLHttpRequest interception...'], ['Перехват fetch и XMLHttpRequest успешно установлен', 'Fetch and XMLHttpRequest interception installed successfully'], ['Ошибка', 'Error'], ['Перехвачен', 'Intercepted'], ['Получено', 'Received'], ['Нормализовано', 'Normalized'], ['Запуск слияния', 'Starting merge'], ['Слияние завершено', 'Merge completed'], ['Слияние пропущено', 'Merge skipped'], ['Чат разархивирован', 'Chat unarchived'], ['Обнаружено', 'Found'], ['новых чатов', 'new chats'], ['Чатов', 'Chats'], ['архив', 'archive'], ['Ошибка импорта', 'Import error'], ['Открыто окно импорта', 'Import dialog opened'], ['Импорт подтвержден', 'Import confirmed'], ['Импорт отменен пользователем', 'Import cancelled by user'], ['Очистка счетчиков', 'Clearing counters'], ['Экспорт', 'Export'], ['в режиме разработчика', 'in developer mode'], ['Сброс дельты пользователем', 'Delta reset by user'], ['КРИТИЧЕСКАЯ ДЕЛЬТА', 'CRITICAL DELTA'], ['Изменение дельты', 'Delta changed'], ['Показано уведомление рассинхронизации вкладок', 'Tab synchronization warning shown'], ['DOM-сканирование', 'DOM scanning'], ['включено', 'enabled'], ['выключено', 'disabled'], ['Обновлены позиции', 'Positions updated'], ['Вкладка устарела', 'Tab is stale'], ['Нажмите', 'Click'], ['для архивации', 'for archiving']];
-        return pairs.reduce((text, pair) => text.split(pair[0]).join(pair[1]), String(msg));
-    }
-
     function caiLog(msg, type = 'info') {
-        msg = localizeLog(msg);
         console.log(`[CAI Archive] [${type}] ${msg}`);
 
         let consoleEl = document.getElementById('cai-debug-console');
@@ -1634,17 +1601,17 @@
 
             const headerTitle = document.createElement('span');
             headerTitle.className = 'pl-1 text-tiny text-foreground-500 font-bold';
-            headerTitle.textContent = t('archive');
+            headerTitle.textContent = '(Архив)';
 
             const controlsDiv = document.createElement('div');
 
             const btnExport = document.createElement('button');
-            btnExport.textContent = t('save');
+            btnExport.textContent = '⬇️ Save';
             btnExport.className = 'cai-btn';
             btnExport.onclick = () => doExport(true);
 
             const btnImport = document.createElement('button');
-            btnImport.textContent = t('load');
+            btnImport.textContent = '⬆️ Load';
             btnImport.className = 'cai-btn';
             btnImport.onclick = () => doImport(true);
 
@@ -1679,9 +1646,9 @@
             const getColor = (val) => val >= 40 ? 'cai-count-danger' : val >= 25 ? 'cai-count-warn' : 'cai-count-safe';
             const getSuffix = (val) => val >= 40 ? '!!' : val >= 25 ? '!' : '';
             countersDiv.innerHTML = `
-                <span class="cai-counter-label pl-1">${t('added')}</span>
-                <span class="cai-counter-val ${getColor(batchCount)}">${t('simultaneous')} ${batchCount}/50</span>
-                <span class="cai-counter-val ${getColor(deltaCount)}">${t('since')} ${deltaCount}/50</span>
+                <span class="cai-counter-label pl-1">(Было добавлено чатов)</span>
+                <span class="cai-counter-val ${getColor(batchCount)}">(Одновременно: ${batchCount}/50 чатов${getSuffix(batchCount)})</span>
+                <span class="cai-counter-val ${getColor(deltaCount)}">(С последнего момента: ${deltaCount}/50 чатов${getSuffix(deltaCount)})</span>
             `;
         }
 
@@ -1693,7 +1660,7 @@
             if (deltaCount < 50) {
                 const btn = document.createElement('button');
                 btn.className = 'cai-wide-btn cai-btn-reset';
-                btn.textContent = t('reset');
+                btn.textContent = 'Сброс';
                 btn.onclick = resetDelta;
                 const txt = document.createElement('span');
                 txt.className = 'cai-help-text';
@@ -1703,7 +1670,7 @@
             } else {
                 const btn = document.createElement('button');
                 btn.className = 'cai-wide-btn cai-btn-alert';
-                btn.textContent = t('save');
+                btn.textContent = '⬇️ Экспорт';
                 btn.onclick = () => doExport(false);
                 const txt = document.createElement('span');
                 txt.className = 'cai-help-text';
@@ -1753,21 +1720,21 @@
 
             const titleSettings = document.createElement('div');
             titleSettings.className = 'cai-settings-title';
-            titleSettings.textContent = t('settings');
+            titleSettings.textContent = '(Настройки)';
 
             // --- Визуализация разделов ---
             const isVisual = getData(KEY_SETTING_VISUAL);
             const lblVisual = document.createElement('label');
             lblVisual.className = 'cai-toggle';
-            lblVisual.innerHTML = `<input type="checkbox" ${isVisual ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>${t('visual')}</span>`;
+            lblVisual.innerHTML = `<input type="checkbox" ${isVisual ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>(Визуализация разделов)</span>`;
 
             const legendDiv = document.createElement('div');
             legendDiv.className = 'cai-legend';
             legendDiv.style.display = isVisual ? 'flex' : 'none';
             legendDiv.innerHTML = `
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-green"></div> - ${t('newChats')}</div>
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-blue"></div> - ${t('oldChats')}</div>
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-yellow"></div> - ${t('hidden')}</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-green"></div> - Новые чаты</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-blue"></div> - Старые чаты</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-yellow"></div> - Скрытые (опасные)</div>
                 <div class="cai-legend-item" style="margin-top:6px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1)">
                     <span style="display:inline-block;width:24px;height:2px;background:#ef4444;margin-right:6px;vertical-align:middle"></span>
                     <span style="font-size:9px;color:#a1a1aa">Граница новых/старых</span>
@@ -1778,38 +1745,38 @@
             const isAdBlock = getData(KEY_SETTING_ADBLOCK);
             const lblAdBlock = document.createElement('label');
             lblAdBlock.className = 'cai-toggle';
-            lblAdBlock.innerHTML = `<input type="checkbox" ${isAdBlock ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>${t('adblock')}</span>`;
+            lblAdBlock.innerHTML = `<input type="checkbox" ${isAdBlock ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>(Скрыть рекламу)</span>`;
 
             // --- Перехват сети ---
             const isNetIntercept = getData(KEY_SETTING_NET_INTERCEPT);
             const lblNet = document.createElement('label');
             lblNet.className = 'cai-toggle';
-            lblNet.innerHTML = `<input type="checkbox" ${isNetIntercept ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>${t('network')}</span>`;
+            lblNet.innerHTML = `<input type="checkbox" ${isNetIntercept ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>(Перехват сети fetch/XHR)</span>`;
 
             // --- Автосканирование DOM ---
             const isAutoScan = getData(KEY_SETTING_AUTO_SCAN);
             const lblAutoScan = document.createElement('label');
             lblAutoScan.className = 'cai-toggle';
-            lblAutoScan.innerHTML = `<input type="checkbox" ${isAutoScan ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>${t('autoscan')}</span>`;
+            lblAutoScan.innerHTML = `<input type="checkbox" ${isAutoScan ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>(DOM-сканирование fallback)</span>`;
 
             // --- Режим разработчика ---
             const isDevMode = getData(KEY_SETTING_DEV);
             const lblDev = document.createElement('label');
             lblDev.className = 'cai-toggle';
-            lblDev.innerHTML = `<input type="checkbox" ${isDevMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>${t('developer')}</span>`;
+            lblDev.innerHTML = `<input type="checkbox" ${isDevMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Режим разработчика)</span>`;
 
             const devWarningDiv = document.createElement('div');
             devWarningDiv.className = 'cai-dev-warning';
             devWarningDiv.style.display = isDevMode ? 'block' : 'none';
             devWarningDiv.innerHTML = `
-                <span class="cai-dev-warning-title">⚠️ ${currentLanguage() === 'en' ? 'Use with caution!' : 'Используйте осторожно!'}</span>
-                ${currentLanguage() === 'en' ? 'This mode disables synchronization safeguards.' : 'Этот режим отключает защитные механизмы синхронизации.'}
+                <span class="cai-dev-warning-title">⚠️ Используйте осторожно!</span>
+                Этот режим отключает защитные механизмы синхронизации.
                 <ul class="cai-dev-list" style="list-style: none; padding: 0; margin: 0;">
-                    <li>– ${currentLanguage() === 'en' ? 'Export/Import from the top buttons does not reset counters' : 'Экспорт/Импорт через верхние кнопки не сбрасывает счётчики'}</li>
-                    <li>– ${currentLanguage() === 'en' ? 'Visualization can be disabled even with 50+ new chats' : 'Можно отключить визуализацию даже при 50+ новых чатах'}</li>
-                    <li>– ${currentLanguage() === 'en' ? 'Test the archive without affecting delta counters' : 'Тестирование архива без влияния на дельта-счётчики'}</li>
-                    <li>– ${currentLanguage() === 'en' ? 'Show position numbers on chats' : 'Нумерация порядка позиций на чатах'}</li>
-                    <li>– ${currentLanguage() === 'en' ? 'Risk of device synchronization issues if misused' : 'Риск рассинхронизации между устройствами при неправильном использовании'}</li>
+                    <li>– Экспорт/Импорт через верхние кнопки не сбрасывает счётчики</li>
+                    <li>– Можно отключить визуализацию даже при 50+ новых чатах</li>
+                    <li>– Тестирование архива без влияния на дельту-счётчики</li>
+                    <li>– Нумерация порядка позиций на чатах</li>
+                    <li>– Риск рассинхронизации между устройствами при неправильном использовании</li>
                 </ul>
             `;
 
@@ -1820,26 +1787,10 @@
             lblDebug.style.marginTop = '10px';
             lblDebug.style.borderTop = '1px solid rgba(255,255,255,0.1)';
             lblDebug.style.paddingTop = '10px';
-            lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>${t('debug')}</span>`;
-
-            // Переключатель языка находится первым в настройках: он всегда доступен
-            // и сам переводится после переключения.
-            const languageRow = document.createElement('div');
-            languageRow.className = 'cai-language-switcher';
-            languageRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
-            languageRow.innerHTML = `<span>${t('language')}</span><span style="display:flex;gap:4px"><button type="button" class="cai-btn cai-lang-btn" data-lang="en">${t('english')}</button><button type="button" class="cai-btn cai-lang-btn" data-lang="ru">${t('russian')}</button></span>`;
-            languageRow.querySelectorAll('[data-lang]').forEach(button => {
-                button.style.opacity = button.dataset.lang === currentLanguage() ? '1' : '0.55';
-                button.addEventListener('click', () => {
-                    if (blockStaleArchiveAction('language change')) return;
-                    saveData(KEY_LANGUAGE, button.dataset.lang);
-                    renderArchive();
-                });
-            });
+            lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Консоль логов)</span>`;
 
             // Сборка настроек
             settingsDiv.appendChild(titleSettings);
-            settingsDiv.appendChild(languageRow);
             settingsDiv.appendChild(lblVisual);
             settingsDiv.appendChild(legendDiv);
             settingsDiv.appendChild(lblAdBlock);
@@ -1932,7 +1883,7 @@
             // Счетчик общего количества
             const totalCountDiv = document.createElement('div');
             totalCountDiv.className = 'cai-total-count';
-            totalCountDiv.textContent = `(${t('chats')}: ${archiveData.length})`;
+            totalCountDiv.textContent = `(Чатов в архиве: ${archiveData.length})`;
             bottomPanel.appendChild(totalCountDiv);
         }
 
