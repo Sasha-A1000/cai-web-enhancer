@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         C.AI Web Enhancer
 // @namespace    https://github.com/Sasha-A1000/cai-web-enhancer
-// @version      15.1.0
+// @version      15.0.0
 // @description  Enhances the Character.AI web interface with a persistent chat archive, network-based chat detection, import/export tools, visual chat status, debugging tools and optional ad blocking.
 // @author       Sasha-A1000
 // @license      MIT
