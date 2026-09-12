@@ -122,8 +122,8 @@
 
         consoleEl.innerHTML = `
             <div class="cai-debug-header" style="padding: 4px 8px; background: #27272a; border-bottom: 1px solid #52525b; font-weight: bold; color: #fff; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <span>(Фоновый лог действий)</span>
-                <button id="cai-debug-clear" style="background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px;">Очистить</button>
+                <span>${t('debugLog')}</span>
+                <button id="cai-debug-clear" style="background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px;">${t('clear')}</button>
             </div>
             <div class="cai-debug-messages" id="cai-debug-messages" style="flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; pointer-events: auto;"></div>
         `;
@@ -146,7 +146,14 @@
         consoleEl.style.display = (isDev && isDebug) ? 'flex' : 'none';
     }
 
+    function localizeLog(msg) {
+        if (currentLanguage() !== 'en') return msg;
+        const pairs = [['Установка перехвата fetch и XMLHttpRequest...', 'Installing fetch and XMLHttpRequest interception...'], ['Перехват fetch и XMLHttpRequest успешно установлен', 'Fetch and XMLHttpRequest interception installed successfully'], ['Ошибка', 'Error'], ['Перехвачен', 'Intercepted'], ['Получено', 'Received'], ['Нормализовано', 'Normalized'], ['Запуск слияния', 'Starting merge'], ['Слияние завершено', 'Merge completed'], ['Слияние пропущено', 'Merge skipped'], ['Чат разархивирован', 'Chat unarchived'], ['Обнаружено', 'Found'], ['новых чатов', 'new chats'], ['Чатов', 'Chats'], ['архив', 'archive'], ['Ошибка импорта', 'Import error'], ['Открыто окно импорта', 'Import dialog opened'], ['Импорт подтвержден', 'Import confirmed'], ['Импорт отменен пользователем', 'Import cancelled by user'], ['Очистка счетчиков', 'Clearing counters'], ['Экспорт', 'Export'], ['в режиме разработчика', 'in developer mode'], ['Сброс дельты пользователем', 'Delta reset by user'], ['КРИТИЧЕСКАЯ ДЕЛЬТА', 'CRITICAL DELTA'], ['Изменение дельты', 'Delta changed'], ['Показано уведомление рассинхронизации вкладок', 'Tab synchronization warning shown'], ['DOM-сканирование', 'DOM scanning'], ['включено', 'enabled'], ['выключено', 'disabled'], ['Обновлены позиции', 'Positions updated'], ['Вкладка устарела', 'Tab is stale'], ['Нажмите', 'Click'], ['для архивации', 'for archiving']];
+        return pairs.reduce((text, pair) => text.split(pair[0]).join(pair[1]), String(msg));
+    }
+
     function caiLog(msg, type = 'info') {
+        msg = localizeLog(msg);
         console.log(`[CAI Archive] [${type}] ${msg}`);
 
         let consoleEl = document.getElementById('cai-debug-console');
@@ -1696,7 +1703,7 @@
             } else {
                 const btn = document.createElement('button');
                 btn.className = 'cai-wide-btn cai-btn-alert';
-                btn.textContent = '⬇️ Экспорт';
+                btn.textContent = t('save');
                 btn.onclick = () => doExport(false);
                 const txt = document.createElement('span');
                 txt.className = 'cai-help-text';
@@ -1925,7 +1932,7 @@
             // Счетчик общего количества
             const totalCountDiv = document.createElement('div');
             totalCountDiv.className = 'cai-total-count';
-            totalCountDiv.textContent = `(Чатов в архиве: ${archiveData.length})`;
+            totalCountDiv.textContent = `(${t('chats')}: ${archiveData.length})`;
             bottomPanel.appendChild(totalCountDiv);
         }
 
