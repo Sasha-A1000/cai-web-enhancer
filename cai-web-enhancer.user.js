@@ -36,6 +36,32 @@
     const KEY_SETTING_AUTO_SCAN = 'cai_setting_auto_scan_v1';
     const KEY_NET_CACHE = 'cai_net_cache_v1';
     const KEY_SETTING_ADBLOCK = 'cai_setting_adblock_v1';
+    const KEY_LANGUAGE = 'cai_setting_language_v1';
+
+    // All user-facing labels are kept in one small dictionary so the archive can
+    // be switched without changing its behaviour or stored archive data.
+    const I18N = {
+        ru: {
+            archive: '(Архив)', save: '⬇️ Сохранить', load: '⬆️ Загрузить', reset: 'Сброс',
+            settings: '(Настройки)', language: '(Язык)', english: 'ENG', russian: 'RUS',
+            visual: '(Визуализация разделов)', adblock: '(Скрыть рекламу)', network: '(Перехват сети fetch/XHR)',
+            autoscan: '(DOM-сканирование fallback)', developer: '(Режим разработчика)', debug: '(Консоль логов)',
+            empty: 'Пусто', chats: 'Чатов в архиве', added: '(Было добавлено чатов)', simultaneous: '(Одновременно:', since: '(С последнего момента:',
+            newChats: 'Новые чаты', oldChats: 'Старые чаты', hidden: 'Скрытые (опасные)', boundary: 'Граница новых/старых',
+            debugLog: '(Фоновый лог действий)', clear: 'Очистить'
+        },
+        en: {
+            archive: '(Archive)', save: '⬇️ Save', load: '⬆️ Load', reset: 'Reset',
+            settings: '(Settings)', language: '(Language)', english: 'ENG', russian: 'RUS',
+            visual: '(Section visualization)', adblock: '(Hide ads)', network: '(Network interception fetch/XHR)',
+            autoscan: '(DOM scanning fallback)', developer: '(Developer mode)', debug: '(Log console)',
+            empty: 'Empty', chats: 'Chats in archive', added: '(Chats added)', simultaneous: '(At once:', since: '(Since last export:',
+            newChats: 'New chats', oldChats: 'Old chats', hidden: 'Hidden (dangerous)', boundary: 'New/old boundary',
+            debugLog: '(Background action log)', clear: 'Clear'
+        }
+    };
+    function currentLanguage() { return getData(KEY_LANGUAGE) === 'en' ? 'en' : 'ru'; }
+    function t(key) { return I18N[currentLanguage()][key] || I18N.ru[key] || key; }
 
     let lastManualDeleteTime = 0;
     let isDomStale = false;
@@ -1646,9 +1672,9 @@
             const getColor = (val) => val >= 40 ? 'cai-count-danger' : val >= 25 ? 'cai-count-warn' : 'cai-count-safe';
             const getSuffix = (val) => val >= 40 ? '!!' : val >= 25 ? '!' : '';
             countersDiv.innerHTML = `
-                <span class="cai-counter-label pl-1">(Было добавлено чатов)</span>
-                <span class="cai-counter-val ${getColor(batchCount)}">(Одновременно: ${batchCount}/50 чатов${getSuffix(batchCount)})</span>
-                <span class="cai-counter-val ${getColor(deltaCount)}">(С последнего момента: ${deltaCount}/50 чатов${getSuffix(deltaCount)})</span>
+                <span class="cai-counter-label pl-1">${t('added')}</span>
+                <span class="cai-counter-val ${getColor(batchCount)}">${t('simultaneous')} ${batchCount}/50</span>
+                <span class="cai-counter-val ${getColor(deltaCount)}">${t('since')} ${deltaCount}/50</span>
             `;
         }
 
@@ -1660,7 +1686,7 @@
             if (deltaCount < 50) {
                 const btn = document.createElement('button');
                 btn.className = 'cai-wide-btn cai-btn-reset';
-                btn.textContent = 'Сброс';
+                btn.textContent = t('reset');
                 btn.onclick = resetDelta;
                 const txt = document.createElement('span');
                 txt.className = 'cai-help-text';
@@ -1732,9 +1758,9 @@
             legendDiv.className = 'cai-legend';
             legendDiv.style.display = isVisual ? 'flex' : 'none';
             legendDiv.innerHTML = `
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-green"></div> - Новые чаты</div>
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-blue"></div> - Старые чаты</div>
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-yellow"></div> - Скрытые (опасные)</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-green"></div> - ${t('newChats')}</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-blue"></div> - ${t('oldChats')}</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-yellow"></div> - ${t('hidden')}</div>
                 <div class="cai-legend-item" style="margin-top:6px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1)">
                     <span style="display:inline-block;width:24px;height:2px;background:#ef4444;margin-right:6px;vertical-align:middle"></span>
                     <span style="font-size:9px;color:#a1a1aa">Граница новых/старых</span>
@@ -1745,7 +1771,7 @@
             const isAdBlock = getData(KEY_SETTING_ADBLOCK);
             const lblAdBlock = document.createElement('label');
             lblAdBlock.className = 'cai-toggle';
-            lblAdBlock.innerHTML = `<input type="checkbox" ${isAdBlock ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>(Скрыть рекламу)</span>`;
+            lblAdBlock.innerHTML = `<input type="checkbox" ${isAdBlock ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>${t('adblock')}</span>`;
 
             // --- Перехват сети ---
             const isNetIntercept = getData(KEY_SETTING_NET_INTERCEPT);
@@ -1789,8 +1815,24 @@
             lblDebug.style.paddingTop = '10px';
             lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Консоль логов)</span>`;
 
+            // Переключатель языка находится первым в настройках: он всегда доступен
+            // и сам переводится после переключения.
+            const languageRow = document.createElement('div');
+            languageRow.className = 'cai-language-switcher';
+            languageRow.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;';
+            languageRow.innerHTML = `<span>${t('language')}</span><span style="display:flex;gap:4px"><button type="button" class="cai-btn cai-lang-btn" data-lang="en">${t('english')}</button><button type="button" class="cai-btn cai-lang-btn" data-lang="ru">${t('russian')}</button></span>`;
+            languageRow.querySelectorAll('[data-lang]').forEach(button => {
+                button.style.opacity = button.dataset.lang === currentLanguage() ? '1' : '0.55';
+                button.addEventListener('click', () => {
+                    if (blockStaleArchiveAction('language change')) return;
+                    saveData(KEY_LANGUAGE, button.dataset.lang);
+                    renderArchive();
+                });
+            });
+
             // Сборка настроек
             settingsDiv.appendChild(titleSettings);
+            settingsDiv.appendChild(languageRow);
             settingsDiv.appendChild(lblVisual);
             settingsDiv.appendChild(legendDiv);
             settingsDiv.appendChild(lblAdBlock);
