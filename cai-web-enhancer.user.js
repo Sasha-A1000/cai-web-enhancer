@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         C.AI Web Enhancer
 // @namespace    https://github.com/Sasha-A1000/cai-web-enhancer
-// @version      15.0.0
+// @version      15.1.0
 // @description  Enhances the Character.AI web interface with a persistent chat archive, network-based chat detection, import/export tools, visual chat status, debugging tools and optional ad blocking.
 // @author       Sasha-A1000
 // @license      MIT
@@ -36,6 +36,7 @@
     const KEY_SETTING_AUTO_SCAN = 'cai_setting_auto_scan_v1';
     const KEY_NET_CACHE = 'cai_net_cache_v1';
     const KEY_SETTING_ADBLOCK = 'cai_setting_adblock_v1';
+    const KEY_SETTING_LANG = 'cai_setting_lang_v1'; // Язык: 'ru' | 'en'
 
     let lastManualDeleteTime = 0;
     let isDomStale = false;
@@ -68,7 +69,303 @@
         return ARCHIVE_WRITE_LOCK_KEYS.has(key);
     }
 
-    function blockStaleArchiveAction(actionName = 'действие архива', event = null) {
+    // ===================== СИСТЕМА ЛОКАЛИЗАЦИИ (I18N) =====================
+    const I18N = {
+        ru: {
+            lang_name: '(Язык)',
+            archive_title: '(Архив)',
+            btn_save: '⬇️ Save',
+            btn_load: '⬆️ Load',
+            cnt_added: '(Было добавлено чатов)',
+            cnt_batch: (val, suf) => `(Одновременно: ${val}/50 чатов${suf})`,
+            cnt_delta: (val, suf) => `(С последнего момента: ${val}/50 чатов${suf})`,
+            btn_reset: 'Сброс',
+            btn_export: '⬇️ Экспорт',
+            help_reset: '(С момента последнего сброса/экспорта новые чаты не превысили предел. Вам не обязательно делать экспорт данных.) Когда вы будете переходить между устройствами, не забудьте нажать кнопку Сброс на этом устройстве и также проделать на втором устройстве как только перейдёте.',
+            help_export: '(Порог по чатам был превышен! Вам нужно сделать экспорт данных по кнопке ⬇️ Экспорт выше этого текста.) Не забудьте сделать импорт данных на другом устройстве!',
+            del_warning: 'Так как вы удалили чат из архива навсегда, автоматически такое удаление подтянуться на другие устройства не сможет. Если вы желаете продублировать это удаление, то по окончанию сессии вам нужно экспортировать данные и перенести файл экспорта на другое устройство и импортировать его.',
+            settings_title: '(Настройки)',
+            opt_visual: '(Визуализация разделов)',
+            legend_new: '- Новые чаты',
+            legend_old: '- Старые чаты',
+            legend_warn: '- Скрытые (опасные)',
+            legend_divider: 'Граница новых/старых',
+            opt_adblock: '(Скрыть рекламу)',
+            opt_net: '(Перехват сети fetch/XHR)',
+            opt_autoscan: '(DOM-сканирование fallback)',
+            opt_dev: '(Режим разработчика)',
+            dev_warn_title: '⚠️ Используйте осторожно!',
+            dev_warn_desc: 'Этот режим отключает защитные механизмы синхронизации.',
+            dev_li_1: '– Экспорт/Импорт через верхние кнопки не сбрасывает счётчики',
+            dev_li_2: '– Можно отключить визуализацию даже при 50+ новых чатах',
+            dev_li_3: '– Тестирование архива без влияния на дельту-счётчики',
+            dev_li_4: '– Нумерация порядка позиций на чатах',
+            dev_li_5: '– Риск рассинхронизации между устройствами при неправильном использовании',
+            opt_debug: '(Консоль логов)',
+            total_chats: (count) => `(Чатов в архиве: ${count})`,
+            empty_archive: 'Пусто',
+            confirm_delete_chat: (name) => `Удалить ${name}?`,
+            dev_vis_alert: 'Отключить визуализацию при 50+ чатах можно только в Режиме разработчика!',
+            // Модальное окно рассинхронизации
+            stale_title: 'Вкладка устарела',
+            stale_text: 'Архив изменён в другой вкладке. Действия архива тут отключены до обновления.',
+            stale_btn: 'Нажмите, чтобы обновить',
+            stale_box_tooltip: 'Нажмите, чтобы обновить страницу',
+            stale_ctrl_tooltip: 'Вкладка устарела. Нажмите жёлтое уведомление, чтобы обновить страницу.',
+            stale_link_tooltip: 'Архив на этой вкладке заблокирован до перезагрузки.',
+            action_archive_action: 'действие архива',
+            action_blocked_log: (act) => `Заблокировано действие на устаревшей вкладке: ${act}. Нужна перезагрузка.`,
+            // Логи и консоль
+            dbg_header: '(Фоновый лог действий)',
+            dbg_clear: 'Очистить',
+            dbg_cleared: 'Логи очищены пользователем',
+            dbg_opened: 'Консоль открыта. Фоновые логи загружены',
+            // Экспорт / Импорт / Сброс
+            reset_alert_high: (delta) => `ВНИМАНИЕ! Порог был превышен (${delta}/50)!\nВы сделали сброс вместо экспорта. Рассинхронизация вероятна, не забудьте сделать сброс и на других устройствах!`,
+            reset_alert_ok: (delta) => `Счетчик дельты (${delta}/50) успешно сброшен!\nНе забудьте нажать кнопку 'Сброс' и на других ваших устройствах при входе.`,
+            reset_alert_zero: 'Счетчик уже равен нулю (0/50). Сброс не требовался, но выполнен.',
+            export_empty: 'Архив пуст. Скачивать нечего.',
+            export_alert_high: (delta) => `Порог по чатам был превышен (${delta}/50)!\nДанные сохранены. Обязательно сделайте ИМПОРТ этого файла на других устройствах!`,
+            export_alert_ok: (delta) => `Порог ещё не превышен (${delta}/50).\nДанные сохранены. Вы можете сделать импорт на других устройствах для надежности.`,
+            export_alert_zero: 'Данные архива сохранены.\nНовых чатов с прошлого раза не было (0/50).',
+            export_dev_note: '\n[Режим Разработчика: Верхняя кнопка. Счётчики Дельты НЕ стёрты]',
+            import_confirm: (count) => `Заменить архив (${count} чатов)?`,
+            import_dev_done: '[Режим Разработчика] Импорт без стирания дельты завершен',
+            import_error: (err) => `Ошибка импорта: ${err}`,
+            // Логи
+            log_net_install: 'Установка перехвата fetch и XMLHttpRequest...',
+            log_net_install_ok: 'Перехват fetch и XMLHttpRequest успешно установлен',
+            log_net_fetch_recent: (url) => `[NET/fetch] Перехвачен запрос недавних чатов: ${url}...`,
+            log_net_fetch_neo: (url) => `[NET/fetch] Перехвачен Neo API запрос: ${url}...`,
+            log_net_json_err: (err) => `[NET/fetch] Ошибка парсинга JSON: ${err}`,
+            log_net_err: (err) => `[NET/fetch] Ошибка перехвата: ${err}`,
+            log_net_xhr_recent: (url) => `[NET/XHR] Перехвачен запрос недавних чатов: ${url}...`,
+            log_net_xhr_neo: (url) => `[NET/XHR] Перехвачен Neo API запрос: ${url}...`,
+            log_net_xhr_err: (err) => `[NET/XHR] Ошибка перехвата: ${err}`,
+            log_net_stale_skip: (src) => `[NET/${src}] Обработка сетевых данных пропущена: вкладка устарела и архив заблокирован до перезагрузки`,
+            log_net_empty: (src) => `[NET/${src}] Данные получены, но массив чатов пуст или не распознан`,
+            log_net_received: (src, count) => `[NET/${src}] Получено ${count} чатов из сети`,
+            log_net_normalized: (src, count) => `[NET/${src}] Нормализовано ${count} чатов. Запуск слияния...`,
+            log_net_neo_extracted: (src, count) => `[NET/${src}] Neo API: извлечено ${count} чатов из вложенной структуры`,
+            log_net_neo_err: (src, err) => `[NET/${src}] Neo API: ошибка извлечения: ${err}`,
+            log_net_merge_stale: '[NET Merge] Слияние пропущено: вкладка устарела и архив заблокирован до перезагрузки',
+            log_net_unarchived: (name) => `[NET Merge] Чат разархивирован (вернулся): ${name}`,
+            log_net_to_archive: (count) => `[NET Merge] Отправка в архив: ${count} чатов`,
+            log_net_new_chats: (count) => `[NET Merge] Обнаружено ${count} новых чатов`,
+            log_net_merge_done: (arch, trk) => `[NET Merge] Слияние завершено. Архив: ${arch}, Tracked: ${trk}`,
+            log_save_lock: (key) => `Запись ${key} заблокирована: вкладка устарела и требует перезагрузки`,
+            log_save_err: (key, err) => `Ошибка сохранения ${key}: ${err}`,
+            log_snapshot_created: (cnt) => `Создан новый слепок позиций (Всего ${cnt})`,
+            log_pos_calc: (name, id, pos) => `[Позиция] Расчет для чата ${name} (ID ${id}). Позиция в слепке: ${pos}`,
+            log_pos_missing: (name) => `[⚠️ ВНИМАНИЕ] Чат ${name} отсутствует в слепке позиций! Падает на индекс 0.`,
+            log_pos_intersect: (idx) => `[Позиция] Найдено пересечение! Индекс вставки: ${idx}`,
+            log_delta_reset: (delta) => `Сброс дельты пользователем. Текущая дельта: ${delta}`,
+            log_export_attempt: (chats, delta) => `Попытка экспорта. Чатов: ${chats}, Дельта: ${delta}`,
+            log_export_dev: 'Экспорт в режиме разработчика (без сброса дельты)',
+            log_export_clear: 'Очистка счетчиков после успешного экспорта',
+            log_import_open: 'Открыто окно импорта',
+            log_import_ok: (cnt) => `Импорт подтвержден. Загружено ${cnt} чатов`,
+            log_import_cancel: 'Импорт отменен пользователем',
+            log_import_err: (err) => `Ошибка импорта: ${err}`,
+            log_stale_shown: 'Показано уведомление рассинхронизации вкладок',
+            log_scan_skip_net: 'DOM-сканирование пропущено (актуальные сетевые данные)',
+            log_scan_disabled: 'DOM-сканирование отключено (только перехват сети)',
+            log_manual_del_revert: (ids) => `Снят статус ручного удаления для вернувшихся чатов: ${ids}`,
+            log_unarchived_screen: (name) => `Чат разархивирован (вернулся на экран): ${name}`,
+            log_green_pos_updated: 'Обновлены позиции зелёных чатов в слепке',
+            log_sort_to_archive: (cnt) => `[Сортировка] Найдено чатов для архивации: ${cnt}`,
+            log_insert_result: (name, idx) => `[Итог вставки] Чат ${name} -> индекс [${idx}]`,
+            log_soft_warn_hidden: (name) => `Мягкое предупреждение! Скрыт новый чат ${name}`,
+            log_batch_added: (cnt) => `Добавлена пачка новых чатов. Размер: ${cnt}`,
+            log_batch_blocked_manual: 'Блокировка счетчика новых чатов из-за недавнего ручного скрытия',
+            log_crit_delta: 'КРИТИЧЕСКАЯ ДЕЛЬТА >= 50. Принудительное включение визуала',
+            log_delta_change: (cur, next) => `Изменение дельты: ${cur} -> ${next}`,
+            log_net_on: 'Перехват сети включён',
+            log_net_off: 'Перехват сети выключён. Перезагрузите страницу для полного отключения.',
+            log_autoscan_state: (st) => `DOM-сканирование: ${st ? 'включено' : 'выключено'}`,
+            log_manual_deleted: (name) => `Ручное удаление чата из архива: ${name}`,
+            log_manual_hide_intercepted: 'Перехвачен клик ручного скрытия (hide character)',
+            log_script_loaded: 'C.AI Chat Archive v15.1 загружен',
+            log_adblock_hidden: (cnt) => `AdBlock: скрыто элементов: ${cnt}`,
+            log_lang_changed: (lang) => `Язык изменён на: ${lang.toUpperCase()}`,
+            soft_warning_text: (count) => {
+                const lastTwo = count % 100;
+                const lastOne = count % 10;
+                let chatWord;
+                if (lastTwo >= 11 && lastTwo <= 14) chatWord = 'новых чатов';
+                else if (lastOne === 1) chatWord = 'новый чат';
+                else if (lastOne >= 2 && lastOne <= 4) chatWord = 'новых чата';
+                else chatWord = 'новых чатов';
+
+                const isOne = (lastTwo !== 11 && lastOne === 1);
+                const pronoun1 = isOne ? 'его' : 'их';
+                const pronoun2 = isOne ? 'этот чат был удалён' : 'эти чаты были удалены';
+                const ending = isOne ? 'этому чату' : 'этим чатам';
+                const endingAlt = isOne ? 'этот чат попал сюда сам' : 'эти чаты или некоторые из них попали сюда сами';
+                return `(Вы скрыли ${count} ${chatWord} в архив. Чтобы избежать рассинхронизации, удалите ${pronoun1} крестиком из списка ниже, либо сделайте экспорт. Если ${pronoun2} вами, то смело жмите крестик по ${ending}; если же ${endingAlt}, лучше сделайте экспорт)`;
+            }
+        },
+        en: {
+            lang_name: '(Language)',
+            archive_title: '(Archive)',
+            btn_save: '⬇️ Save',
+            btn_load: '⬆️ Load',
+            cnt_added: '(Chats added)',
+            cnt_batch: (val, suf) => `(At once: ${val}/50 chats${suf})`,
+            cnt_delta: (val, suf) => `(Since last moment: ${val}/50 chats${suf})`,
+            btn_reset: 'Reset',
+            btn_export: '⬇️ Export',
+            help_reset: '(Since the last reset/export, new chats have not exceeded the limit. Data export is not required.) When switching between devices, remember to click Reset on this device and do the same on your second device as soon as you switch.',
+            help_export: '(Chat threshold was exceeded! You need to export data via the ⬇️ Export button above this text.) Remember to import the data on your other device!',
+            del_warning: 'Since you permanently deleted a chat from the archive, this deletion cannot sync automatically to other devices. To mirror this deletion, export your data at the end of the session, transfer the export file to the other device and import it.',
+            settings_title: '(Settings)',
+            opt_visual: '(Section visualization)',
+            legend_new: '- New chats',
+            legend_old: '- Old chats',
+            legend_warn: '- Hidden (critical)',
+            legend_divider: 'New/old boundary',
+            opt_adblock: '(Hide ads)',
+            opt_net: '(Network interception fetch/XHR)',
+            opt_autoscan: '(DOM scan fallback)',
+            opt_dev: '(Developer mode)',
+            dev_warn_title: '⚠️ Use with caution!',
+            dev_warn_desc: 'This mode disables synchronization safety mechanisms.',
+            dev_li_1: '– Top button Export/Import does not reset counters',
+            dev_li_2: '– Visualization can be disabled even at 50+ new chats',
+            dev_li_3: '– Archive testing without affecting delta counters',
+            dev_li_4: '– Position order numbering on chats',
+            dev_li_5: '– Risk of desync between devices if misused',
+            opt_debug: '(Log console)',
+            total_chats: (count) => `(Chats in archive: ${count})`,
+            empty_archive: 'Empty',
+            confirm_delete_chat: (name) => `Delete ${name}?`,
+            dev_vis_alert: 'Disabling visualization at 50+ chats is only allowed in Developer Mode!',
+            // Stale window
+            stale_title: 'Tab is outdated',
+            stale_text: 'Archive was modified in another tab. Archive actions here are disabled until reload.',
+            stale_btn: 'Click to reload',
+            stale_box_tooltip: 'Click to reload the page',
+            stale_ctrl_tooltip: 'Tab is outdated. Click the yellow notification to reload page.',
+            stale_link_tooltip: 'Archive on this tab is locked until reload.',
+            action_archive_action: 'archive action',
+            action_blocked_log: (act) => `Action blocked on outdated tab: ${act}. Reload required.`,
+            // Logs and console
+            dbg_header: '(Background action log)',
+            dbg_clear: 'Clear',
+            dbg_cleared: 'Logs cleared by user',
+            dbg_opened: 'Console opened. Background logs loaded',
+            // Export / Import / Reset
+            reset_alert_high: (delta) => `WARNING! Threshold was exceeded (${delta}/50)!\nYou performed a Reset instead of an Export. Desync is likely, don't forget to reset on other devices as well!`,
+            reset_alert_ok: (delta) => `Delta counter (${delta}/50) successfully reset!\nRemember to click 'Reset' on your other devices as well upon sign-in.`,
+            reset_alert_zero: 'Counter is already zero (0/50). Reset was not required, but performed.',
+            export_empty: 'Archive is empty. Nothing to download.',
+            export_alert_high: (delta) => `Chat threshold was exceeded (${delta}/50)!\nData saved. Be sure to IMPORT this file on other devices!`,
+            export_alert_ok: (delta) => `Threshold not exceeded yet (${delta}/50).\nData saved. You can import on other devices for reliability.`,
+            export_alert_zero: 'Archive data saved.\nNo new chats since last time (0/50).',
+            export_dev_note: '\n[Dev Mode: Top button. Delta counters were NOT erased]',
+            import_confirm: (count) => `Replace archive (${count} chats)?`,
+            import_dev_done: '[Dev Mode] Import without erasing delta completed',
+            import_error: (err) => `Import error: ${err}`,
+            // Logs
+            log_net_install: 'Installing fetch and XMLHttpRequest interception...',
+            log_net_install_ok: 'Fetch and XMLHttpRequest interception installed successfully',
+            log_net_fetch_recent: (url) => `[NET/fetch] Intercepted recent chats request: ${url}...`,
+            log_net_fetch_neo: (url) => `[NET/fetch] Intercepted Neo API request: ${url}...`,
+            log_net_json_err: (err) => `[NET/fetch] JSON parse error: ${err}`,
+            log_net_err: (err) => `[NET/fetch] Interception error: ${err}`,
+            log_net_xhr_recent: (url) => `[NET/XHR] Intercepted recent chats request: ${url}...`,
+            log_net_xhr_neo: (url) => `[NET/XHR] Intercepted Neo API request: ${url}...`,
+            log_net_xhr_err: (err) => `[NET/XHR] Interception error: ${err}`,
+            log_net_stale_skip: (src) => `[NET/${src}] Network data processing skipped: tab is outdated and archive is locked until reload`,
+            log_net_empty: (src) => `[NET/${src}] Data received, but chats array is empty or unrecognized`,
+            log_net_received: (src, count) => `[NET/${src}] Received ${count} chats from network`,
+            log_net_normalized: (src, count) => `[NET/${src}] Normalized ${count} chats. Starting merge...`,
+            log_net_neo_extracted: (src, count) => `[NET/${src}] Neo API: extracted ${count} chats from nested structure`,
+            log_net_neo_err: (src, err) => `[NET/${src}] Neo API: extraction error: ${err}`,
+            log_net_merge_stale: '[NET Merge] Merge skipped: tab is outdated and archive is locked until reload',
+            log_net_unarchived: (name) => `[NET Merge] Chat unarchived (returned): ${name}`,
+            log_net_to_archive: (count) => `[NET Merge] Sending to archive: ${count} chats`,
+            log_net_new_chats: (count) => `[NET Merge] Detected ${count} new chats`,
+            log_net_merge_done: (arch, trk) => `[NET Merge] Merge completed. Archive: ${arch}, Tracked: ${trk}`,
+            log_save_lock: (key) => `Writing ${key} locked: tab is outdated and requires reload`,
+            log_save_err: (key, err) => `Error saving ${key}: ${err}`,
+            log_snapshot_created: (cnt) => `New positions snapshot created (Total ${cnt})`,
+            log_pos_calc: (name, id, pos) => `[Position] Calculation for chat ${name} (ID ${id}). Position in snapshot: ${pos}`,
+            log_pos_missing: (name) => `[⚠️ WARNING] Chat ${name} is missing in position snapshot! Dropping to index 0.`,
+            log_pos_intersect: (idx) => `[Position] Intersection found! Insert index: ${idx}`,
+            log_delta_reset: (delta) => `Delta reset by user. Current delta: ${delta}`,
+            log_export_attempt: (chats, delta) => `Export attempt. Chats: ${chats}, Delta: ${delta}`,
+            log_export_dev: 'Export in Developer Mode (without resetting delta)',
+            log_export_clear: 'Counters cleared after successful export',
+            log_import_open: 'Import file picker opened',
+            log_import_ok: (cnt) => `Import confirmed. Loaded ${cnt} chats`,
+            log_import_cancel: 'Import cancelled by user',
+            log_import_err: (err) => `Import error: ${err}`,
+            log_stale_shown: 'Tabs desync notification shown',
+            log_scan_skip_net: 'DOM scan skipped (fresh network data)',
+            log_scan_disabled: 'DOM scan disabled (network intercept only)',
+            log_manual_del_revert: (ids) => `Removed manual deletion flag for returned chats: ${ids}`,
+            log_unarchived_screen: (name) => `Chat unarchived (returned to screen): ${name}`,
+            log_green_pos_updated: 'Updated green chat positions in snapshot',
+            log_sort_to_archive: (cnt) => `[Sorting] Found chats to archive: ${cnt}`,
+            log_insert_result: (name, idx) => `[Insert Result] Chat ${name} -> index [${idx}]`,
+            log_soft_warn_hidden: (name) => `Soft warning! Hidden new chat ${name}`,
+            log_batch_added: (cnt) => `Added batch of new chats. Size: ${cnt}`,
+            log_batch_blocked_manual: 'Blocked new chats counter due to recent manual hide',
+            log_crit_delta: 'CRITICAL DELTA >= 50. Forcing visual mode ON',
+            log_delta_change: (cur, next) => `Delta change: ${cur} -> ${next}`,
+            log_net_on: 'Network intercept enabled',
+            log_net_off: 'Network intercept disabled. Reload the page for full effect.',
+            log_autoscan_state: (st) => `DOM scanning: ${st ? 'enabled' : 'disabled'}`,
+            log_manual_deleted: (name) => `Manual deletion of chat from archive: ${name}`,
+            log_manual_hide_intercepted: 'Intercepted manual hide click (hide character)',
+            log_script_loaded: 'C.AI Chat Archive v15.1 loaded',
+            log_adblock_hidden: (cnt) => `AdBlock: elements hidden: ${cnt}`,
+            log_lang_changed: (lang) => `Language changed to: ${lang.toUpperCase()}`,
+            soft_warning_text: (count) => {
+                const isOne = count === 1;
+                const chatWord = isOne ? 'new chat' : 'new chats';
+                const pronoun1 = isOne ? 'it' : 'them';
+                const pronoun2 = isOne ? 'this chat was removed' : 'these chats were removed';
+                const ending = isOne ? 'this chat' : 'these chats';
+                const endingAlt = isOne ? 'this chat ended up here automatically' : 'these chats (or some of them) ended up here automatically';
+                return `(You hid ${count} ${chatWord} into the archive. To avoid desync, delete ${pronoun1} with the cross icon in the list below, or export data. If ${pronoun2} by you, feel free to click the cross on ${ending}; if ${endingAlt}, it is better to export)`;
+            }
+        }
+    };
+
+    function getLang() {
+        const stored = getData(KEY_SETTING_LANG);
+        return (stored === 'en' || stored === 'ru') ? stored : 'ru';
+    }
+
+    function t(key, ...args) {
+        const lang = getLang();
+        const dict = I18N[lang] || I18N.ru;
+        const val = dict[key] !== undefined ? dict[key] : (I18N.ru[key] || key);
+        if (typeof val === 'function') {
+            return val(...args);
+        }
+        return val;
+    }
+
+    function setLanguage(lang) {
+        if (lang !== 'ru' && lang !== 'en') return;
+        saveData(KEY_SETTING_LANG, lang);
+        caiLog(t('log_lang_changed', lang), 'action');
+
+        // Обновляем заголовок консоли отладки, если она существует
+        const dbgHeader = document.querySelector('#cai-debug-console .cai-debug-header span');
+        const dbgClearBtn = document.querySelector('#cai-debug-clear');
+        if (dbgHeader) dbgHeader.textContent = t('dbg_header');
+        if (dbgClearBtn) dbgClearBtn.textContent = t('dbg_clear');
+
+        // Перерисовываем архив с новым языком
+        renderArchive();
+    }
+
+    function blockStaleArchiveAction(actionName = null, event = null) {
+        if (!actionName) actionName = t('action_archive_action');
         if (!isDomStale) return false;
         if (event) {
             event.preventDefault();
@@ -77,7 +374,7 @@
                 event.stopImmediatePropagation();
             }
         }
-        caiLog(`Заблокировано действие на устаревшей вкладке: ${actionName}. Нужна перезагрузка.`, 'warn');
+        caiLog(t('action_blocked_log', actionName), 'warn');
         showStaleWarningModal();
         return true;
     }
@@ -96,8 +393,8 @@
 
         consoleEl.innerHTML = `
             <div class="cai-debug-header" style="padding: 4px 8px; background: #27272a; border-bottom: 1px solid #52525b; font-weight: bold; color: #fff; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <span>(Фоновый лог действий)</span>
-                <button id="cai-debug-clear" style="background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px;">Очистить</button>
+                <span>${t('dbg_header')}</span>
+                <button id="cai-debug-clear" style="background: none; border: none; color: #a1a1aa; cursor: pointer; font-size: 11px;">${t('dbg_clear')}</button>
             </div>
             <div class="cai-debug-messages" id="cai-debug-messages" style="flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px; pointer-events: auto;"></div>
         `;
@@ -105,7 +402,7 @@
 
         document.getElementById('cai-debug-clear').onclick = () => {
             document.getElementById('cai-debug-messages').innerHTML = '';
-            caiLog('Логи очищены пользователем', 'info');
+            caiLog(t('dbg_cleared'), 'info');
         };
     }
 
@@ -134,7 +431,8 @@
         if (!msgsEl) return;
 
         const entry = document.createElement('div');
-        const time = new Date().toLocaleTimeString('ru-RU', {
+        const langLocale = getLang() === 'en' ? 'en-US' : 'ru-RU';
+        const time = new Date().toLocaleTimeString(langLocale, {
             hour12: false,
             second: '2-digit',
             minute: '2-digit',
@@ -185,6 +483,15 @@
         .cai-total-count { font-size: 11px; color: #71717a; text-align: center; display: block; padding-bottom: 4px; }
         .cai-settings-divider { margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.05); border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 8px; margin-bottom: 8px; }
         .cai-settings-title { font-size: 11px; color: #71717a; text-align: center; margin-bottom: 8px; font-weight: bold; }
+        
+        /* Языковой переключатель */
+        .cai-lang-container { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .cai-lang-label { font-size: 11px; color: #a1a1aa; font-weight: 500; user-select: none; }
+        .cai-lang-btn-group { display: inline-flex; background: rgba(255, 255, 255, 0.07); border-radius: 6px; padding: 2px; gap: 2px; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .cai-lang-btn { background: transparent; border: none; color: #a1a1aa; font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; line-height: 1.4; }
+        .cai-lang-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+        .cai-lang-btn.active { background: #3b82f6; color: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
         .cai-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 11px; color: #a1a1aa; margin-bottom: 8px; user-select: none; }
         .cai-toggle input { display: none; }
         .cai-slider { position: relative; width: 30px; height: 16px; border-radius: 16px; transition: background-color 0.3s ease; flex-shrink: 0; }
@@ -290,8 +597,6 @@
             display: none !important;
         }
     `;
-    // При @run-at document-start элемента <head> может ещё не существовать,
-    // поэтому используем запасной узел, чтобы стили применились в любом случае.
     (document.head || document.documentElement).appendChild(style);
 
     // ===================== ПЕРЕХВАТ СЕТИ (NETWORK INTERCEPTION) =====================
@@ -299,7 +604,7 @@
         const isEnabled = getData(KEY_SETTING_NET_INTERCEPT);
         if (!isEnabled) return;
 
-        caiLog('Установка перехвата fetch и XMLHttpRequest...', 'net');
+        caiLog(t('log_net_install'), 'net');
 
         // --- Перехват fetch ---
         const originalFetch = window.fetch;
@@ -308,31 +613,29 @@
             try {
                 const url = (typeof args[0] === 'string') ? args[0] : (args[0]?.url || '');
 
-                // Эндпоинт недавних чатов / списка персонажей
                 if (url.includes('/api/agents/recent/') ||
                     url.includes('/chat/characters/recent/') ||
                     url.includes('recent-chats') ||
                     url.includes('/api/chats/recent') ||
                     url.includes('get-my-recent-chats')) {
 
-                    caiLog(`[NET/fetch] Перехвачен запрос недавних чатов: ${url.substring(0, 80)}...`, 'net');
+                    caiLog(t('log_net_fetch_recent', url.substring(0, 80)), 'net');
 
                     const cloned = response.clone();
                     cloned.json().then(data => {
                         processNetworkChatsData(data, 'fetch');
                     }).catch(err => {
-                        caiLog(`[NET/fetch] Ошибка парсинга JSON: ${err.message}`, 'error');
+                        caiLog(t('log_net_json_err', err.message), 'error');
                     });
                 }
 
-                // Эндпоинт Neo API — история / информация о чате
                 if (url.includes('/api/trpc/') ||
                     url.includes('neo') ||
                     url.includes('character.info') ||
                     url.includes('chat.configs') ||
                     url.includes('recent-chat')) {
 
-                    caiLog(`[NET/fetch] Перехвачен Neo API запрос: ${url.substring(0, 80)}...`, 'net');
+                    caiLog(t('log_net_fetch_neo', url.substring(0, 80)), 'net');
 
                     const cloned = response.clone();
                     cloned.json().then(data => {
@@ -341,7 +644,7 @@
                 }
 
             } catch (err) {
-                caiLog(`[NET/fetch] Ошибка перехвата: ${err.message}`, 'error');
+                caiLog(t('log_net_err', err.message), 'error');
             }
             return response;
         };
@@ -366,7 +669,7 @@
                         url.includes('/api/chats/recent') ||
                         url.includes('get-my-recent-chats')) {
 
-                        caiLog(`[NET/XHR] Перехвачен запрос недавних чатов: ${url.substring(0, 80)}...`, 'net');
+                        caiLog(t('log_net_xhr_recent', url.substring(0, 80)), 'net');
                         const data = JSON.parse(this.responseText);
                         processNetworkChatsData(data, 'xhr');
                     }
@@ -377,64 +680,52 @@
                         url.includes('chat.configs') ||
                         url.includes('recent-chat')) {
 
-                        caiLog(`[NET/XHR] Перехвачен Neo API запрос: ${url.substring(0, 80)}...`, 'net');
+                        caiLog(t('log_net_xhr_neo', url.substring(0, 80)), 'net');
                         try {
                             const data = JSON.parse(this.responseText);
                             processNeoApiData(data, 'xhr');
                         } catch (_) { /* не все ответы — JSON */ }
                     }
                 } catch (err) {
-                    caiLog(`[NET/XHR] Ошибка перехвата: ${err.message}`, 'error');
+                    caiLog(t('log_net_xhr_err', err.message), 'error');
                 }
             });
             return originalXHRSend.apply(this, args);
         };
 
-        caiLog('Перехват fetch и XMLHttpRequest успешно установлен', 'action');
+        caiLog(t('log_net_install_ok'), 'action');
     }
 
     // Обработка данных чатов из сетевого ответа
     function processNetworkChatsData(data, source) {
         if (!data) return;
         if (isDomStale) {
-            caiLog(`[NET/${source}] Обработка сетевых данных пропущена: вкладка устарела и архив заблокирован до перезагрузки`, 'warn');
+            caiLog(t('log_net_stale_skip', source), 'warn');
             return;
         }
 
-        // C.AI может возвращать данные в разных форматах
         let chats = [];
 
-        // Формат 1: { chats: [...] }
         if (data.chats && Array.isArray(data.chats)) {
             chats = data.chats;
-        }
-        // Формат 2: { result: { chats: [...] } } (Neo API)
-        else if (data.result && data.result.chats && Array.isArray(data.result.chats)) {
+        } else if (data.result && data.result.chats && Array.isArray(data.result.chats)) {
             chats = data.result.chats;
-        }
-        // Формат 3: { result: { data: { chats: [...] } } }
-        else if (data.result?.data?.chats) {
+        } else if (data.result?.data?.chats) {
             chats = data.result.data.chats;
-        }
-        // Формат 4: массив напрямую
-        else if (Array.isArray(data)) {
+        } else if (Array.isArray(data)) {
             chats = data;
-        }
-        // Формат 5: { result: [...] }
-        else if (data.result && Array.isArray(data.result)) {
+        } else if (data.result && Array.isArray(data.result)) {
             chats = data.result;
         }
 
         if (chats.length === 0) {
-            caiLog(`[NET/${source}] Данные получены, но массив чатов пуст или не распознан`, 'warn');
+            caiLog(t('log_net_empty', source), 'warn');
             return;
         }
 
-        caiLog(`[NET/${source}] Получено ${chats.length} чатов из сети`, 'action');
+        caiLog(t('log_net_received', source, chats.length), 'action');
 
-        // Нормализуем данные чатов в наш формат
         const normalizedChats = chats.map(chat => {
-            // Разные поля для ID, имени, аватара в зависимости от API
             const id = chat.character_id || chat.character?.id || chat.id || chat.chat_id || null;
             const name = chat.character_name || chat.character?.name || chat.name || chat.title || 'Unknown';
             const avatar = chat.character_avatar_url || chat.character?.avatar_file_name || chat.avatar_url || chat.avatar || null;
@@ -450,45 +741,38 @@
             };
         }).filter(c => c.id !== null);
 
-        // Сохраняем в сетевой кэш
         networkCache.chats = normalizedChats;
         networkCache.lastUpdate = Date.now();
         saveData(KEY_NET_CACHE, networkCache);
 
-        caiLog(`[NET/${source}] Нормализовано ${normalizedChats.length} чатов. Запуск слияния...`, 'action');
+        caiLog(t('log_net_normalized', source, normalizedChats.length), 'action');
 
-        // Запускаем слияние с архивом (асинхронно, чтобы не блокировать)
         setTimeout(() => mergeNetworkData(normalizedChats), 100);
     }
 
-    // Обработка Neo API данных (trpc-запросы)
     function processNeoApiData(data, source) {
         if (!data) return;
 
-        // Ищем вложенные данные о чатах/персонажах в любом уровне вложенности
         try {
             const chatData = extractChatsFromDeepObject(data);
             if (chatData.length > 0) {
-                caiLog(`[NET/${source}] Neo API: извлечено ${chatData.length} чатов из вложенной структуры`, 'net');
+                caiLog(t('log_net_neo_extracted', source, chatData.length), 'net');
                 processNetworkChatsData({ chats: chatData }, source + '/neo');
             }
         } catch (err) {
-            caiLog(`[NET/${source}] Neo API: ошибка извлечения: ${err.message}`, 'error');
+            caiLog(t('log_net_neo_err', source, err.message), 'error');
         }
     }
 
-    // Рекурсивный поиск объектов, похожих на чаты, в глубине JSON
     function extractChatsFromDeepObject(obj, depth = 0) {
         if (depth > 8 || !obj || typeof obj !== 'object') return [];
         const results = [];
 
-        // Проверяем, не является ли текущий объект чатом
         if (obj.character_id || (obj.character?.id) || (obj.chat_id && obj.character_name)) {
             results.push(obj);
             return results;
         }
 
-        // Рекурсивный обход
         if (Array.isArray(obj)) {
             for (const item of obj) {
                 results.push(...extractChatsFromDeepObject(item, depth + 1));
@@ -507,23 +791,18 @@
     // ===================== ADBLOCK =====================
     let adblockObserver = null;
 
-    // Точечные селекторы рекламных блоков. По ним скрывается ТОЛЬКО сам
-    // найденный элемент (баннер и кнопка "Скрыть рекламу") — без подъёма
-    // к произвольным предкам, поэтому реальный интерфейс не затрагивается.
     const AD_TARGET_SELECTORS = [
-        '[data-testid="in-house-anchor-ad"]',   // внутренний баннер (c.ai FM / c.ai+)
-        'button[aria-label="Скрыть рекламу"]',  // кнопка скрытия, торчащая снизу/сверху баннера
+        '[data-testid="in-house-anchor-ad"]',
+        'button[aria-label="Скрыть рекламу"]',
         'button[aria-label="Hide Ad"]',
         'button[aria-label="Hide ad"]',
-        'div[id^="div-gpt-ad"]',                // контейнеры рекламы Google
+        'div[id^="div-gpt-ad"]',
         'div[id^="google_ads_iframe"]'
     ];
 
     function hideAdElement(el) {
         if (!el || el.classList.contains('cai-ad-hidden')) return false;
         el.classList.add('cai-ad-hidden');
-        // Дублируем инлайном с !important: скрытие переживёт даже перезапись
-        // классов/стилей со стороны Next.js/React при гидрации и ре-рендерах.
         el.style.setProperty('display', 'none', 'important');
         return true;
     }
@@ -534,7 +813,6 @@
         if (el.style.display === 'none') el.style.removeProperty('display');
     }
 
-    // Есть ли внутри элемента видимый контент (текст или не скрытые нами элементы)?
     function hasVisibleContent(el) {
         for (const child of el.childNodes) {
             if (child.nodeType === Node.TEXT_NODE) {
@@ -572,15 +850,12 @@
     }
 
     function scanAndHideAds() {
-        // Самовосстановление класса на <html>, если сайт затёр его при ре-рендере/гидрации
         if (!document.documentElement.classList.contains('cai-adblock-on')) {
             document.documentElement.classList.add('cai-adblock-on');
         }
 
         let newlyHidden = 0;
 
-        // 1) Точечно скрываем сами рекламные блоки и кнопки "Скрыть рекламу"
-        //    (оба варианта: кнопка снизу баннера и кнопка сверху баннера).
         const hiddenAds = [];
         AD_TARGET_SELECTORS.forEach(sel => {
             document.querySelectorAll(sel).forEach(el => {
@@ -589,10 +864,6 @@
             });
         });
 
-        // 2) Схлопываем опустевшие после скрытия рекламы обёртки, чтобы не
-        //    оставалось пустой полосы (баннер 85px + кнопка 24px). Поднимаемся
-        //    вверх ТОЛЬКО пока внутри не осталось ничего видимого: первый же
-        //    элемент интерфейса останавливает подъём, поэтому скрыть интерфейс невозможно.
         hiddenAds.forEach(el => {
             let parent = el.parentElement;
             let depth = 0;
@@ -608,18 +879,15 @@
             }
         });
 
-        // 3) Если сайт вернул контент в схлопнутую обёртку (ре-рендер), возвращаем её.
-        //    Обход с конца (самые глубокие первыми), чтобы вложенные обёртки
-        //    восстанавливались в правильном порядке.
         Array.from(document.querySelectorAll('.cai-ad-collapsed')).reverse().forEach(wrapper => {
             if (hasVisibleContent(wrapper)) {
                 restoreAdElement(wrapper);
             }
         });
 
-        // 4) Блоки с текстовой пометкой "Реклама"
         document.querySelectorAll('p').forEach(p => {
-            if (p.textContent.trim() === 'Реклама') {
+            const txt = p.textContent.trim();
+            if (txt === 'Реклама' || txt === 'Ad' || txt === 'Advertisement') {
                 const container = p.closest('div.flex.justify-between');
                 if (container && container.parentElement) {
                     if (hideAdElement(container.parentElement)) newlyHidden++;
@@ -627,7 +895,6 @@
             }
         });
 
-        // 5) Апселл-блоки "Обновить до c.ai+"
         document.querySelectorAll('button.text-white').forEach(btn => {
             if (btn.textContent.includes('Обновить до') || btn.textContent.includes('Upgrade to')) {
                 const wrapper = btn.closest('div[class*="rounded"]');
@@ -636,7 +903,7 @@
         });
 
         if (newlyHidden > 0) {
-            caiLog(`AdBlock: скрыто элементов: ${newlyHidden}`, 'action');
+            caiLog(t('log_adblock_hidden', newlyHidden), 'action');
         }
     }
 
@@ -644,7 +911,7 @@
     function mergeNetworkData(netChats) {
         if (netChats.length === 0) return;
         if (isDomStale) {
-            caiLog('[NET Merge] Слияние пропущено: вкладка устарела и архив заблокирован до перезагрузки', 'warn');
+            caiLog(t('log_net_merge_stale'), 'warn');
             return;
         }
 
@@ -661,10 +928,9 @@
         const archivedIds = new Set(archive.map(c => c.id));
         const snapshotIds = new Set(snapshotObjs.map(c => c.id));
 
-        // 1) Чаты, которые были в архиве, но вернулись в недавние — разархивируем
         const newArchive = archive.filter(archivedChat => {
             if (currentIds.has(archivedChat.id)) {
-                caiLog(`[NET Merge] Чат разархивирован (вернулся): ${archivedChat.name}`, 'info');
+                caiLog(t('log_net_unarchived', archivedChat.name), 'info');
                 archiveChanged = true;
                 if (softWarningChats.includes(archivedChat.id)) {
                     softWarningChats = softWarningChats.filter(id => id !== archivedChat.id);
@@ -676,20 +942,16 @@
         });
         archive = newArchive;
 
-        // 2) Чаты, которые были в снимке, но пропали из недавних — отправляем в архив
         const chatsToArchive = [];
         snapshotObjs.forEach(oldChat => {
             if (!currentIds.has(oldChat.id) && !archive.find(c => c.id === oldChat.id)) {
-                // Проверяем, есть ли в сетевом кэше — если есть, берём обновлённые данные
                 const fromNet = netChats.find(c => c.id === oldChat.id);
                 chatsToArchive.push(fromNet || oldChat);
             }
         });
 
         if (chatsToArchive.length > 0) {
-            caiLog(`[NET Merge] Отправка в архив: ${chatsToArchive.length} чатов`, 'warn');
-
-            const positionIds = new Set(positionsSnapshot.map(c => c.id));
+            caiLog(t('log_net_to_archive', chatsToArchive.length), 'warn');
 
             chatsToArchive.sort((a, b) => {
                 const posA = positionsSnapshot.findIndex(c => c.id === a.id);
@@ -712,10 +974,9 @@
             });
         }
 
-        // 3) Обнаружение новых чатов
         const newChats = netChats.filter(c => !snapshotIds.has(c.id) && !archivedIds.has(c.id));
         if (newChats.length > 0) {
-            caiLog(`[NET Merge] Обнаружено ${newChats.length} новых чатов`, 'action');
+            caiLog(t('log_net_new_chats', newChats.length), 'action');
             saveData(KEY_LAST_BATCH, newChats.length);
             countersChanged = true;
 
@@ -723,7 +984,6 @@
             trackedChats = [...new Set([...trackedChats, ...trulyNewIds])];
         }
 
-        // Сохраняем результаты
         if (archiveChanged) saveData(KEY_ARCHIVE, archive);
         if (softWarningChanged) saveData(KEY_SOFT_WARNING_CHATS, softWarningChats);
         if (countersChanged) {
@@ -731,10 +991,8 @@
             saveData(KEY_DELTA, trackedChats.length);
         }
 
-        // Обновляем снимок
         saveData(KEY_SNAPSHOT, netChats);
 
-        // Обновляем позиции
         netChats.forEach(chat => {
             const positionIds = new Set(positionsSnapshot.map(c => c.id));
             if (!positionIds.has(chat.id)) {
@@ -744,7 +1002,7 @@
         saveData(KEY_POSITIONS_SNAPSHOT, positionsSnapshot);
 
         renderArchive();
-        caiLog(`[NET Merge] Слияние завершено. Архив: ${archive.length}, Tracked: ${trackedChats.length}`, 'action');
+        caiLog(t('log_net_merge_done', archive.length, trackedChats.length), 'action');
     }
 
     // ===================== УТИЛИТЫ ДАННЫХ =====================
@@ -758,10 +1016,11 @@
             if (key === KEY_LAST_BATCH || key === KEY_DELTA) return 0;
             if (key === KEY_SETTING_VISUAL || key === KEY_SETTING_DEV) return false;
             if (key === KEY_SETTING_DEBUG) return false;
-            if (key === KEY_SETTING_NET_INTERCEPT) return true; // По умолчанию включён
+            if (key === KEY_SETTING_NET_INTERCEPT) return true;
             if (key === KEY_SETTING_AUTO_SCAN) return true;
             if (key === KEY_NET_CACHE) return { chats: [], lastUpdate: 0 };
             if (key === KEY_SETTING_ADBLOCK) return false;
+            if (key === KEY_SETTING_LANG) return 'ru';
             return [];
         }
     }
@@ -769,12 +1028,12 @@
     function saveData(key, data) {
         try {
             if (isDomStale && isArchiveWriteLockedKey(key)) {
-                caiLog(`Запись ${key} заблокирована: вкладка устарела и требует перезагрузки`, 'warn');
+                caiLog(t('log_save_lock', key), 'warn');
                 return;
             }
             localStorage.setItem(key, JSON.stringify(data));
         } catch (e) {
-            caiLog(`Ошибка сохранения ${key}: ${e.message}`, 'error');
+            caiLog(t('log_save_err', key, e.message), 'error');
         }
     }
 
@@ -816,7 +1075,7 @@
             }
         });
 
-        caiLog(`Создан новый слепок позиций (Всего ${result.length})`, 'info');
+        caiLog(t('log_snapshot_created', result.length), 'info');
         return result;
     }
 
@@ -876,10 +1135,10 @@
     function findInsertIndexInArchive(chatId, chatName, archive, positionsSnapshot) {
         const posInSnapshot = positionsSnapshot.findIndex(c => c.id === chatId);
 
-        caiLog(`[Позиция] Расчет для чата ${chatName} (ID ${chatId}). Позиция в слепке: ${posInSnapshot}`, 'info');
+        caiLog(t('log_pos_calc', chatName, chatId, posInSnapshot), 'info');
 
         if (posInSnapshot === -1) {
-            caiLog(`[⚠️ ВНИМАНИЕ] Чат ${chatName} отсутствует в слепке позиций! Падает на индекс 0.`, 'warn');
+            caiLog(t('log_pos_missing', chatName), 'warn');
             return 0;
         }
 
@@ -894,7 +1153,7 @@
 
             if (archiveChatPosInSnapshot > posInSnapshot) {
                 insertIndex = i;
-                caiLog(`[Позиция] Найдено пересечение! Индекс вставки: ${i}`, 'action');
+                caiLog(t('log_pos_intersect', i), 'action');
                 break;
             }
         }
@@ -926,7 +1185,6 @@
 
         if (!visualMode) return;
 
-        // Проверяем, есть ли зелёные чаты в архиве
         const archiveHasGreen = archiveData.some(c => trackedChats.includes(c.id));
 
         let lastGreenIndex = -1;
@@ -948,7 +1206,6 @@
             else if (isNew)        el.classList.add('cai-main-item-new');
             else                   el.classList.add('cai-main-item-old');
 
-            // Красная линия только если в архиве НЕТ зелёных чатов
             if (i === lastGreenIndex && !archiveHasGreen) {
                 el.classList.add('cai-divider-after');
             }
@@ -973,17 +1230,17 @@
 
     // ===================== ДЕЙСТВИЯ ПОЛЬЗОВАТЕЛЯ =====================
     function resetDelta() {
-        if (blockStaleArchiveAction('сброс счётчика')) return;
+        if (blockStaleArchiveAction(t('btn_reset'))) return;
         const delta = getData(KEY_DELTA) || 0;
-        caiLog(`Сброс дельты пользователем. Текущая дельта: ${delta}`, 'action');
+        caiLog(t('log_delta_reset', delta), 'action');
         let message = '';
 
         if (delta > 50) {
-            message = `ВНИМАНИЕ! Порог был превышен (${delta}/50)!\nВы сделали сброс вместо экспорта. Рассинхронизация вероятна, не забудьте сделать сброс и на других устройствах!`;
+            message = t('reset_alert_high', delta);
         } else if (delta > 0) {
-            message = `Счетчик дельты (${delta}/50) успешно сброшен!\nНе забудьте нажать кнопку 'Сброс' и на других ваших устройствах при входе.`;
+            message = t('reset_alert_ok', delta);
         } else {
-            message = 'Счетчик уже равен нулю (0/50). Сброс не требовался, но выполнен.';
+            message = t('reset_alert_zero');
         }
 
         saveData(KEY_DELTA, 0);
@@ -999,33 +1256,33 @@
     }
 
     function doExport(isTopButton) {
-        if (blockStaleArchiveAction('экспорт архива')) return;
+        if (blockStaleArchiveAction(t('btn_export'))) return;
         const data = getData(KEY_ARCHIVE);
         const lastBatch = getData(KEY_LAST_BATCH) || 0;
         const delta = getData(KEY_DELTA) || 0;
 
-        caiLog(`Попытка экспорта. Чатов: ${data.length}, Дельта: ${delta}`, 'action');
+        caiLog(t('log_export_attempt', data.length, delta), 'action');
 
-        if (data.length === 0) { alert('Архив пуст. Скачивать нечего.'); return; }
+        if (data.length === 0) { alert(t('export_empty')); return; }
 
         let isDev = getData(KEY_SETTING_DEV);
         let skipErase = isTopButton && isDev;
         let message = '';
 
         if (delta > 50) {
-            message = `Порог по чатам был превышен (${delta}/50)!\nДанные сохранены. Обязательно сделайте ИМПОРТ этого файла на других устройствах!`;
+            message = t('export_alert_high', delta);
         } else if (delta > 0) {
-            message = `Порог ещё не превышен (${delta}/50).\nДанные сохранены. Вы можете сделать импорт на других устройствах для надежности.`;
+            message = t('export_alert_ok', delta);
         } else {
-            message = `Данные архива сохранены.\nНовых чатов с прошлого раза не было (0/50).`;
+            message = t('export_alert_zero');
         }
 
         if (skipErase) {
-            message += '\n[Режим Разработчика: Верхняя кнопка. Счётчики Дельты НЕ стёрты]';
-            caiLog('Экспорт в режиме разработчика (без сброса дельты)', 'warn');
+            message += t('export_dev_note');
+            caiLog(t('log_export_dev'), 'warn');
         }
 
-        const exportObj = { version: '15.0', chats: data, lastBatch: lastBatch, delta: 0 };
+        const exportObj = { version: '15.1', chats: data, lastBatch: lastBatch, delta: 0 };
         const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -1035,7 +1292,7 @@
         document.body.removeChild(a);
 
         if (!skipErase) {
-            caiLog('Очистка счетчиков после успешного экспорта', 'info');
+            caiLog(t('log_export_clear'), 'info');
             saveData(KEY_DELTA, 0);
             saveData(KEY_DELTA_TRACKED_CHATS, []);
             saveData(KEY_SOFT_WARNING_CHATS, []);
@@ -1052,8 +1309,8 @@
     }
 
     function doImport(isTopButton) {
-        if (blockStaleArchiveAction('импорт архива')) return;
-        caiLog('Открыто окно импорта', 'action');
+        if (blockStaleArchiveAction(t('btn_load'))) return;
+        caiLog(t('log_import_open'), 'action');
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';
@@ -1067,8 +1324,8 @@
                     let importedChats = Array.isArray(json) ? json : (json.chats || []);
                     let importedBatch = Math.max(0, json.lastBatch || 0);
 
-                    if (confirm(`Заменить архив (${importedChats.length} чатов)?`)) {
-                        caiLog(`Импорт подтвержден. Загружено ${importedChats.length} чатов`, 'warn');
+                    if (confirm(t('import_confirm', importedChats.length))) {
+                        caiLog(t('log_import_ok', importedChats.length), 'warn');
                         let isDev = getData(KEY_SETTING_DEV);
                         let skipErase = isTopButton && isDev;
                         saveData(KEY_ARCHIVE, importedChats);
@@ -1088,15 +1345,15 @@
                             }, 100);
                             if (!isDev) saveData(KEY_SETTING_VISUAL, false);
                         } else {
-                            setTimeout(() => alert('[Режим Разработчика] Импорт без стирания дельты завершен'), 100);
+                            setTimeout(() => alert(t('import_dev_done')), 100);
                         }
                         renderArchive();
                     } else {
-                        caiLog('Импорт отменен пользователем', 'info');
+                        caiLog(t('log_import_cancel'), 'info');
                     }
                 } catch (err) {
-                    caiLog(`Ошибка импорта: ${err.message}`, 'error');
-                    alert('Ошибка импорта: ' + err.message);
+                    caiLog(t('log_import_err', err.message), 'error');
+                    alert(t('import_error', err.message));
                 }
             };
             reader.readAsText(file);
@@ -1169,7 +1426,7 @@
                 }
                 control.disabled = true;
                 control.setAttribute('aria-disabled', 'true');
-                control.title = 'Вкладка устарела. Нажмите жёлтое уведомление, чтобы обновить страницу.';
+                control.title = t('stale_ctrl_tooltip');
             } else if (control.dataset.caiPrevDisabled) {
                 control.disabled = control.dataset.caiPrevDisabled === 'true';
                 control.removeAttribute('aria-disabled');
@@ -1182,7 +1439,7 @@
             if (isDomStale) {
                 link.setAttribute('aria-disabled', 'true');
                 link.setAttribute('tabindex', '-1');
-                link.title = 'Архив на этой вкладке заблокирован до перезагрузки.';
+                link.title = t('stale_link_tooltip');
             } else {
                 link.removeAttribute('aria-disabled');
                 link.removeAttribute('tabindex');
@@ -1196,7 +1453,7 @@
         const target = event.target instanceof Element ? event.target : event.target?.parentElement;
         const actionable = target?.closest('button, a, input, label');
         if (!actionable || !actionable.closest('#cai-archive-container')) return;
-        blockStaleArchiveAction('клик по заблокированному блоку архива', event);
+        blockStaleArchiveAction(t('action_archive_action'), event);
     }
 
     // ===================== УВЕДОМЛЕНИЕ РАССИНХРОНИЗАЦИИ =====================
@@ -1206,7 +1463,7 @@
             scheduleStaleWarningPosition();
             return;
         }
-        caiLog('Показано уведомление рассинхронизации вкладок', 'warn');
+        caiLog(t('log_stale_shown'), 'warn');
         const modal = document.createElement('div');
         modal.id = 'cai-stale-modal';
 
@@ -1214,7 +1471,7 @@
         box.className = 'cai-stale-box';
         box.setAttribute('role', 'button');
         box.setAttribute('tabindex', '0');
-        box.title = 'Нажмите, чтобы обновить страницу';
+        box.title = t('stale_box_tooltip');
         box.onclick = () => window.location.reload();
         box.onkeydown = (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -1225,15 +1482,15 @@
 
         const title = document.createElement('h3');
         title.className = 'cai-stale-title';
-        title.textContent = 'Вкладка устарела';
+        title.textContent = t('stale_title');
 
         const text = document.createElement('p');
         text.className = 'cai-stale-text';
-        text.textContent = 'Архив изменён в другой вкладке. Действия архива тут отключены до обновления.';
+        text.textContent = t('stale_text');
 
         const btn = document.createElement('span');
         btn.className = 'cai-stale-btn';
-        btn.textContent = 'Нажмите, чтобы обновить';
+        btn.textContent = t('stale_btn');
 
         box.appendChild(title);
         box.appendChild(text);
@@ -1250,17 +1507,16 @@
         if (document.hidden) return;
         if (isDomStale) return;
 
-        // Если сеть включена и недавно получали данные — пропускаем DOM-сканирование
         const isNetEnabled = getData(KEY_SETTING_NET_INTERCEPT);
         const isAutoScanEnabled = getData(KEY_SETTING_AUTO_SCAN);
 
         if (isNetEnabled && networkCache.lastUpdate > 0 && (Date.now() - networkCache.lastUpdate < 3000)) {
-            caiLog('DOM-сканирование пропущено (актуальные сетевые данные)', 'info');
+            caiLog(t('log_scan_skip_net'), 'info');
             return;
         }
 
         if (!isAutoScanEnabled && isNetEnabled) {
-            caiLog('DOM-сканирование отключено (только перехват сети)', 'info');
+            caiLog(t('log_scan_disabled'), 'info');
             return;
         }
 
@@ -1305,7 +1561,7 @@
         if (manualDelIds.length > 0) {
             const returnedToMain = manualDelIds.filter(id => currentMap.has(id));
             if (returnedToMain.length > 0) {
-                caiLog(`Снят статус ручного удаления для вернувшихся чатов: ${returnedToMain.join(', ')}`, 'info');
+                caiLog(t('log_manual_del_revert', returnedToMain.join(', ')), 'info');
                 manualDelIds = manualDelIds.filter(id => !currentMap.has(id));
                 manualDelChanged = true;
             }
@@ -1314,7 +1570,7 @@
         const newArchive = archive.filter(archivedChat => {
             if (currentMap.has(archivedChat.id)) {
                 archiveChanged = true;
-                caiLog(`Чат разархивирован (вернулся на экран): ${archivedChat.name}`, 'info');
+                caiLog(t('log_unarchived_screen', archivedChat.name), 'info');
                 if (softWarningChats.includes(archivedChat.id)) {
                     softWarningChats = softWarningChats.filter(id => id !== archivedChat.id);
                     softWarningChanged = true;
@@ -1338,7 +1594,7 @@
             const changed = updatedSnapshot.length !== positionsSnapshot.length ||
                 updatedSnapshot.some((s, i) => positionsSnapshot[i]?.id !== s.id);
             if (changed) {
-                caiLog('Обновлены позиции зелёных чатов в слепке', 'info');
+                caiLog(t('log_green_pos_updated'), 'info');
                 positionsSnapshot = updatedSnapshot;
                 positionsChanged = true;
             }
@@ -1355,7 +1611,7 @@
             });
 
             if (chatsToArchive.length > 0) {
-                caiLog(`[Сортировка] Найдено чатов для архивации: ${chatsToArchive.length}`, 'warn');
+                caiLog(t('log_sort_to_archive', chatsToArchive.length), 'warn');
                 chatsToArchive.sort((a, b) => {
                     const posA = positionsSnapshot.findIndex(c => c.id === a.id);
                     const posB = positionsSnapshot.findIndex(c => c.id === b.id);
@@ -1366,14 +1622,14 @@
 
                 chatsToArchive.forEach(oldChat => {
                     const insertIndex = findInsertIndexInArchive(oldChat.id, oldChat.name, archive, positionsSnapshot);
-                    caiLog(`[Итог вставки] Чат ${oldChat.name} -> индекс [${insertIndex}]`, 'warn');
+                    caiLog(t('log_insert_result', oldChat.name, insertIndex), 'warn');
 
                     archive.splice(insertIndex, 0, oldChat);
                     archiveChanged = true;
 
                     if (trackedChats.includes(oldChat.id)) {
                         if (!softWarningChats.includes(oldChat.id)) {
-                            caiLog(`Мягкое предупреждение! Скрыт новый чат ${oldChat.name}`, 'error');
+                            caiLog(t('log_soft_warn_hidden', oldChat.name), 'error');
                             softWarningChats.push(oldChat.id);
                             softWarningChanged = true;
                             countersChanged = true;
@@ -1412,11 +1668,11 @@
 
             if (newToTopCount > 0) {
                 if (!isRecentManualDelete) {
-                    caiLog(`Добавлена пачка новых чатов. Размер: ${newToTopCount}`, 'info');
+                    caiLog(t('log_batch_added', newToTopCount), 'info');
                     saveData(KEY_LAST_BATCH, newToTopCount);
                     countersChanged = true;
                 } else {
-                    caiLog('Блокировка счетчика новых чатов из-за недавнего ручного скрытия', 'warn');
+                    caiLog(t('log_batch_blocked_manual'), 'warn');
                 }
                 let topAppearedIds = currentIds.slice(0, newToTopCount);
                 let oldTrackedLength = trackedChats.length;
@@ -1480,7 +1736,7 @@
 
         if (!devMode) {
             if (newDelta >= 50 && currentDelta < 50) {
-                caiLog('КРИТИЧЕСКАЯ ДЕЛЬТА >= 50. Принудительное включение визуала', 'error');
+                caiLog(t('log_crit_delta'), 'error');
                 saveData(KEY_SETTING_VISUAL, true);
                 domNeedsUpdate = true;
             }
@@ -1496,7 +1752,7 @@
 
         if (currentDelta !== newDelta || countersChanged) {
             if (currentDelta !== newDelta) {
-                caiLog(`Изменение дельты: ${currentDelta} -> ${newDelta}`, 'warn');
+                caiLog(t('log_delta_change', currentDelta, newDelta), 'warn');
             }
             saveData(KEY_DELTA, newDelta);
             saveData(KEY_DELTA_TRACKED_CHATS, trackedChats);
@@ -1582,10 +1838,9 @@
         const trackedChatsArr = getData(KEY_DELTA_TRACKED_CHATS) || [];
         const isVisualMode = getData(KEY_SETTING_VISUAL);
         const isDev = getData(KEY_SETTING_DEV);
-        const isDebug = getData(KEY_SETTING_DEBUG);
         const positionsSnapshot = getData(KEY_POSITIONS_SNAPSHOT) || [];
+        const currentLang = getLang();
 
-        // Создание контейнера архива
         if (!archiveContainer) {
             archiveContainer = document.createElement('li');
             archiveContainer.id = 'cai-archive-container';
@@ -1600,18 +1855,21 @@
             titleRow.className = 'flex items-center justify-between';
 
             const headerTitle = document.createElement('span');
+            headerTitle.id = 'cai-header-title';
             headerTitle.className = 'pl-1 text-tiny text-foreground-500 font-bold';
-            headerTitle.textContent = '(Архив)';
+            headerTitle.textContent = t('archive_title');
 
             const controlsDiv = document.createElement('div');
 
             const btnExport = document.createElement('button');
-            btnExport.textContent = '⬇️ Save';
+            btnExport.id = 'cai-top-export';
+            btnExport.textContent = t('btn_save');
             btnExport.className = 'cai-btn';
             btnExport.onclick = () => doExport(true);
 
             const btnImport = document.createElement('button');
-            btnImport.textContent = '⬆️ Load';
+            btnImport.id = 'cai-top-import';
+            btnImport.textContent = t('btn_load');
             btnImport.className = 'cai-btn';
             btnImport.onclick = () => doImport(true);
 
@@ -1640,15 +1898,23 @@
             listContainer.appendChild(archiveContainer);
         }
 
+        // Обновление заголовка и верхних кнопок при смене языка
+        const headerTitleEl = archiveContainer.querySelector('#cai-header-title');
+        if (headerTitleEl) headerTitleEl.textContent = t('archive_title');
+        const btnTopExp = archiveContainer.querySelector('#cai-top-export');
+        if (btnTopExp) btnTopExp.textContent = t('btn_save');
+        const btnTopImp = archiveContainer.querySelector('#cai-top-import');
+        if (btnTopImp) btnTopImp.textContent = t('btn_load');
+
         // Обновление счетчиков
         const countersDiv = archiveContainer.querySelector('#cai-counters-area');
         if (countersDiv) {
             const getColor = (val) => val >= 40 ? 'cai-count-danger' : val >= 25 ? 'cai-count-warn' : 'cai-count-safe';
             const getSuffix = (val) => val >= 40 ? '!!' : val >= 25 ? '!' : '';
             countersDiv.innerHTML = `
-                <span class="cai-counter-label pl-1">(Было добавлено чатов)</span>
-                <span class="cai-counter-val ${getColor(batchCount)}">(Одновременно: ${batchCount}/50 чатов${getSuffix(batchCount)})</span>
-                <span class="cai-counter-val ${getColor(deltaCount)}">(С последнего момента: ${deltaCount}/50 чатов${getSuffix(deltaCount)})</span>
+                <span class="cai-counter-label pl-1">${t('cnt_added')}</span>
+                <span class="cai-counter-val ${getColor(batchCount)}">${t('cnt_batch', batchCount, getSuffix(batchCount))}</span>
+                <span class="cai-counter-val ${getColor(deltaCount)}">${t('cnt_delta', deltaCount, getSuffix(deltaCount))}</span>
             `;
         }
 
@@ -1660,49 +1926,30 @@
             if (deltaCount < 50) {
                 const btn = document.createElement('button');
                 btn.className = 'cai-wide-btn cai-btn-reset';
-                btn.textContent = 'Сброс';
+                btn.textContent = t('btn_reset');
                 btn.onclick = resetDelta;
                 const txt = document.createElement('span');
                 txt.className = 'cai-help-text';
-                txt.textContent = '(С момента последнего сброса/экспорта новые чаты не превысили предел. Вам не обязательно делать экспорт данных.) Когда вы будете переходить между устройствами, не забудьте нажать кнопку Сброс на этом устройстве и также проделать на втором устройстве как только перейдёте.';
+                txt.textContent = t('help_reset');
                 bottomPanel.appendChild(btn);
                 bottomPanel.appendChild(txt);
             } else {
                 const btn = document.createElement('button');
                 btn.className = 'cai-wide-btn cai-btn-alert';
-                btn.textContent = '⬇️ Экспорт';
+                btn.textContent = t('btn_export');
                 btn.onclick = () => doExport(false);
                 const txt = document.createElement('span');
                 txt.className = 'cai-help-text';
-                txt.innerHTML = '(Порог по чатам был превышен! Вам нужно сделать экспорт данных по кнопке ⬇️ Экспорт выше этого текста.) Не забудьте сделать импорт данных на другом устройстве!';
+                txt.innerHTML = t('help_export');
                 bottomPanel.appendChild(btn);
                 bottomPanel.appendChild(txt);
             }
 
             // Мягкие предупреждения
             if (softWarningChats.length > 0) {
-                const count = softWarningChats.length;
-                const lastTwo = count % 100;
-                const lastOne = count % 10;
-                let chatWord;
-                if (lastTwo >= 11 && lastTwo <= 14) {
-                    chatWord = 'новых чатов';
-                } else if (lastOne === 1) {
-                    chatWord = 'новый чат';
-                } else if (lastOne >= 2 && lastOne <= 4) {
-                    chatWord = 'новых чата';
-                } else {
-                    chatWord = 'новых чатов';
-                }
-                const isOne = (lastTwo !== 11 && lastOne === 1);
-                const pronoun1 = isOne ? 'его' : 'их';
-                const pronoun2 = isOne ? 'этот чат был удалён' : 'эти чаты были удалены';
-                const ending = isOne ? 'этому чату' : 'этим чатам';
-                const endingAlt = isOne ? 'этот чат попал сюда сам' : 'эти чаты или некоторые из них попали сюда сами';
-
                 const d = document.createElement('div');
                 d.className = 'cai-soft-warning';
-                d.textContent = `(Вы скрыли ${count} ${chatWord} в архив. Чтобы избежать рассинхронизации, удалите ${pronoun1} крестиком из списка ниже, либо сделайте экспорт. Если ${pronoun2} вами, то смело жмите крестик по ${ending}; если же ${endingAlt}, лучше сделайте экспорт)`;
+                d.textContent = t('soft_warning_text', softWarningChats.length);
                 bottomPanel.appendChild(d);
             }
 
@@ -1710,7 +1957,7 @@
             if (hasManualDel && manualDelIds.length > 0) {
                 const d = document.createElement('div');
                 d.className = 'cai-deletion-warning';
-                d.textContent = 'Так как вы удалили чат из архива навсегда, автоматически такое удаление подтянуться на другие устройства не сможет. Если вы желаете продублировать это удаление, то по окончанию сессии вам нужно экспортировать данные и перенести файл экспорта на другое устройство и импортировать его.';
+                d.textContent = t('del_warning');
                 bottomPanel.appendChild(d);
             }
 
@@ -1720,24 +1967,62 @@
 
             const titleSettings = document.createElement('div');
             titleSettings.className = 'cai-settings-title';
-            titleSettings.textContent = '(Настройки)';
+            titleSettings.textContent = t('settings_title');
+            settingsDiv.appendChild(titleSettings);
+
+            // ================= ПЕРЕКЛЮЧАТЕЛЬ ЯЗЫКА ENG / RUS =================
+            const langContainer = document.createElement('div');
+            langContainer.className = 'cai-lang-container';
+
+            const langLabel = document.createElement('span');
+            langLabel.className = 'cai-lang-label';
+            langLabel.textContent = t('lang_name');
+
+            const langBtnGroup = document.createElement('div');
+            langBtnGroup.className = 'cai-lang-btn-group';
+
+            const btnLangEn = document.createElement('button');
+            btnLangEn.className = `cai-lang-btn ${currentLang === 'en' ? 'active' : ''}`;
+            btnLangEn.textContent = 'ENG';
+            btnLangEn.type = 'button';
+            btnLangEn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentLang !== 'en') setLanguage('en');
+            };
+
+            const btnLangRu = document.createElement('button');
+            btnLangRu.className = `cai-lang-btn ${currentLang === 'ru' ? 'active' : ''}`;
+            btnLangRu.textContent = 'RUS';
+            btnLangRu.type = 'button';
+            btnLangRu.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (currentLang !== 'ru') setLanguage('ru');
+            };
+
+            langBtnGroup.appendChild(btnLangEn);
+            langBtnGroup.appendChild(btnLangRu);
+            langContainer.appendChild(langLabel);
+            langContainer.appendChild(langBtnGroup);
+            settingsDiv.appendChild(langContainer);
 
             // --- Визуализация разделов ---
             const isVisual = getData(KEY_SETTING_VISUAL);
             const lblVisual = document.createElement('label');
             lblVisual.className = 'cai-toggle';
-            lblVisual.innerHTML = `<input type="checkbox" ${isVisual ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>(Визуализация разделов)</span>`;
+            lblVisual.innerHTML = `<input type="checkbox" ${isVisual ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>${t('opt_visual')}</span>`;
 
             const legendDiv = document.createElement('div');
             legendDiv.className = 'cai-legend';
             legendDiv.style.display = isVisual ? 'flex' : 'none';
             legendDiv.innerHTML = `
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-green"></div> - Новые чаты</div>
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-blue"></div> - Старые чаты</div>
-                <div class="cai-legend-item"><div class="cai-color-box cai-box-yellow"></div> - Скрытые (опасные)</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-green"></div> ${t('legend_new')}</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-blue"></div> ${t('legend_old')}</div>
+                <div class="cai-legend-item"><div class="cai-color-box cai-box-yellow"></div> ${t('legend_warn')}</div>
                 <div class="cai-legend-item" style="margin-top:6px;padding-top:4px;border-top:1px dashed rgba(255,255,255,0.1)">
                     <span style="display:inline-block;width:24px;height:2px;background:#ef4444;margin-right:6px;vertical-align:middle"></span>
-                    <span style="font-size:9px;color:#a1a1aa">Граница новых/старых</span>
+                    <span style="font-size:9px;color:#a1a1aa">${t('legend_divider')}</span>
                 </div>
             `;
 
@@ -1745,38 +2030,38 @@
             const isAdBlock = getData(KEY_SETTING_ADBLOCK);
             const lblAdBlock = document.createElement('label');
             lblAdBlock.className = 'cai-toggle';
-            lblAdBlock.innerHTML = `<input type="checkbox" ${isAdBlock ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>(Скрыть рекламу)</span>`;
+            lblAdBlock.innerHTML = `<input type="checkbox" ${isAdBlock ? 'checked' : ''}><span class="cai-slider cai-slider-red-green"></span><span>${t('opt_adblock')}</span>`;
 
             // --- Перехват сети ---
             const isNetIntercept = getData(KEY_SETTING_NET_INTERCEPT);
             const lblNet = document.createElement('label');
             lblNet.className = 'cai-toggle';
-            lblNet.innerHTML = `<input type="checkbox" ${isNetIntercept ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>(Перехват сети fetch/XHR)</span>`;
+            lblNet.innerHTML = `<input type="checkbox" ${isNetIntercept ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>${t('opt_net')}</span>`;
 
             // --- Автосканирование DOM ---
             const isAutoScan = getData(KEY_SETTING_AUTO_SCAN);
             const lblAutoScan = document.createElement('label');
             lblAutoScan.className = 'cai-toggle';
-            lblAutoScan.innerHTML = `<input type="checkbox" ${isAutoScan ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>(DOM-сканирование fallback)</span>`;
+            lblAutoScan.innerHTML = `<input type="checkbox" ${isAutoScan ? 'checked' : ''}><span class="cai-slider cai-slider-orange-teal"></span><span>${t('opt_autoscan')}</span>`;
 
             // --- Режим разработчика ---
             const isDevMode = getData(KEY_SETTING_DEV);
             const lblDev = document.createElement('label');
             lblDev.className = 'cai-toggle';
-            lblDev.innerHTML = `<input type="checkbox" ${isDevMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Режим разработчика)</span>`;
+            lblDev.innerHTML = `<input type="checkbox" ${isDevMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>${t('opt_dev')}</span>`;
 
             const devWarningDiv = document.createElement('div');
             devWarningDiv.className = 'cai-dev-warning';
             devWarningDiv.style.display = isDevMode ? 'block' : 'none';
             devWarningDiv.innerHTML = `
-                <span class="cai-dev-warning-title">⚠️ Используйте осторожно!</span>
-                Этот режим отключает защитные механизмы синхронизации.
+                <span class="cai-dev-warning-title">${t('dev_warn_title')}</span>
+                ${t('dev_warn_desc')}
                 <ul class="cai-dev-list" style="list-style: none; padding: 0; margin: 0;">
-                    <li>– Экспорт/Импорт через верхние кнопки не сбрасывает счётчики</li>
-                    <li>– Можно отключить визуализацию даже при 50+ новых чатах</li>
-                    <li>– Тестирование архива без влияния на дельту-счётчики</li>
-                    <li>– Нумерация порядка позиций на чатах</li>
-                    <li>– Риск рассинхронизации между устройствами при неправильном использовании</li>
+                    <li>${t('dev_li_1')}</li>
+                    <li>${t('dev_li_2')}</li>
+                    <li>${t('dev_li_3')}</li>
+                    <li>${t('dev_li_4')}</li>
+                    <li>${t('dev_li_5')}</li>
                 </ul>
             `;
 
@@ -1787,10 +2072,9 @@
             lblDebug.style.marginTop = '10px';
             lblDebug.style.borderTop = '1px solid rgba(255,255,255,0.1)';
             lblDebug.style.paddingTop = '10px';
-            lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>(Консоль логов)</span>`;
+            lblDebug.innerHTML = `<input type="checkbox" ${isDebugMode ? 'checked' : ''}><span class="cai-slider cai-slider-gray-blue"></span><span>${t('opt_debug')}</span>`;
 
             // Сборка настроек
-            settingsDiv.appendChild(titleSettings);
             settingsDiv.appendChild(lblVisual);
             settingsDiv.appendChild(legendDiv);
             settingsDiv.appendChild(lblAdBlock);
@@ -1803,7 +2087,7 @@
 
             // Обработчики настроек
             lblVisual.querySelector('input').addEventListener('change', (e) => {
-                if (blockStaleArchiveAction('изменение настройки визуализации', e)) {
+                if (blockStaleArchiveAction(t('opt_visual'), e)) {
                     e.target.checked = getData(KEY_SETTING_VISUAL);
                     return;
                 }
@@ -1811,18 +2095,17 @@
                 const dCount = getData(KEY_DELTA) || 0;
                 if (!devM && dCount >= 50 && !e.target.checked) {
                     e.target.checked = true;
-                    alert('Отключить визуализацию при 50+ чатах можно только в Режиме разработчика!');
+                    alert(t('dev_vis_alert'));
                     return;
                 }
                 saveData(KEY_SETTING_VISUAL, e.target.checked);
                 legendDiv.style.display = e.target.checked ? 'flex' : 'none';
-                // Точечное обновление без пересоздания DOM (анимация тумблера сохраняется)
                 updateArchiveItemClasses();
                 updateMainVisuals();
             });
 
             lblAdBlock.querySelector('input').addEventListener('change', (e) => {
-                if (blockStaleArchiveAction('изменение настройки блокировки рекламы', e)) {
+                if (blockStaleArchiveAction(t('opt_adblock'), e)) {
                     e.target.checked = getData(KEY_SETTING_ADBLOCK);
                     return;
                 }
@@ -1835,55 +2118,54 @@
             });
 
             lblNet.querySelector('input').addEventListener('change', (e) => {
-                if (blockStaleArchiveAction('изменение настройки перехвата сети', e)) {
+                if (blockStaleArchiveAction(t('opt_net'), e)) {
                     e.target.checked = getData(KEY_SETTING_NET_INTERCEPT);
                     return;
                 }
                 saveData(KEY_SETTING_NET_INTERCEPT, e.target.checked);
                 if (e.target.checked) {
                     installNetworkInterceptor();
-                    caiLog('Перехват сети включён', 'action');
+                    caiLog(t('log_net_on'), 'action');
                 } else {
-                    caiLog('Перехват сети выключён. Перезагрузите страницу для полного отключения.', 'warn');
+                    caiLog(t('log_net_off'), 'warn');
                 }
             });
 
             lblAutoScan.querySelector('input').addEventListener('change', (e) => {
-                if (blockStaleArchiveAction('изменение настройки DOM-сканирования', e)) {
+                if (blockStaleArchiveAction(t('opt_autoscan'), e)) {
                     e.target.checked = getData(KEY_SETTING_AUTO_SCAN);
                     return;
                 }
                 saveData(KEY_SETTING_AUTO_SCAN, e.target.checked);
-                caiLog(`DOM-сканирование: ${e.target.checked ? 'включено' : 'выключено'}`, 'action');
+                caiLog(t('log_autoscan_state', e.target.checked), 'action');
             });
 
             lblDev.querySelector('input').addEventListener('change', (e) => {
-                if (blockStaleArchiveAction('изменение режима разработчика', e)) {
+                if (blockStaleArchiveAction(t('opt_dev'), e)) {
                     e.target.checked = getData(KEY_SETTING_DEV);
                     return;
                 }
                 saveData(KEY_SETTING_DEV, e.target.checked);
                 devWarningDiv.style.display = e.target.checked ? 'block' : 'none';
                 toggleDebugConsole();
-                // Точечное обновление без пересоздания DOM (анимация тумблера сохраняется)
                 updateArchiveItemClasses();
                 updateMainVisuals();
             });
 
             lblDebug.querySelector('input').addEventListener('change', (e) => {
-                if (blockStaleArchiveAction('изменение настройки консоли логов', e)) {
+                if (blockStaleArchiveAction(t('opt_debug'), e)) {
                     e.target.checked = getData(KEY_SETTING_DEBUG);
                     return;
                 }
                 saveData(KEY_SETTING_DEBUG, e.target.checked);
                 toggleDebugConsole();
-                if (e.target.checked) caiLog('Консоль открыта. Фоновые логи загружены', 'info');
+                if (e.target.checked) caiLog(t('dbg_opened'), 'info');
             });
 
             // Счетчик общего количества
             const totalCountDiv = document.createElement('div');
             totalCountDiv.className = 'cai-total-count';
-            totalCountDiv.textContent = `(Чатов в архиве: ${archiveData.length})`;
+            totalCountDiv.textContent = t('total_chats', archiveData.length);
             bottomPanel.appendChild(totalCountDiv);
         }
 
@@ -1894,7 +2176,7 @@
         if (archiveData.length === 0) {
             const emptyMsg = document.createElement('div');
             emptyMsg.className = 'text-center text-xs text-foreground-500 py-2 italic';
-            emptyMsg.textContent = 'Пусто';
+            emptyMsg.textContent = t('empty_archive');
             ul.appendChild(emptyMsg);
             updateMainVisuals();
             applyArchiveReadOnlyState();
@@ -1916,7 +2198,7 @@
             const isNew = trackedChatsArr.includes(chat.id);
 
             a.className = 'cai-archive-item flex group gap-2 items-center justify-between relative px-2 py-1.5 h-full box-border rounded-small subpixel-antialiased cursor-pointer tap-highlight-transparent outline-none w-full mt-1 data-[hover=true]:bg-scrim-8';
-            a._caiChatId = chat.id; // Сохраняем ID для updateArchiveItemClasses()
+            a._caiChatId = chat.id;
 
             if (isVisualMode) {
                 if (isSoftWarn)        a.classList.add('cai-item-warn');
@@ -1959,9 +2241,9 @@
             deleteBtn.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                if (blockStaleArchiveAction('удаление чата из архива', e)) return;
-                if (confirm(`Удалить ${chat.name}?`)) {
-                    caiLog(`Ручное удаление чата из архива: ${chat.name}`, 'error');
+                if (blockStaleArchiveAction(t('confirm_delete_chat', chat.name), e)) return;
+                if (confirm(t('confirm_delete_chat', chat.name))) {
+                    caiLog(t('log_manual_deleted', chat.name), 'error');
                     const newArch = getData(KEY_ARCHIVE).filter(c => c.id !== chat.id);
                     saveData(KEY_ARCHIVE, newArch);
 
@@ -2008,10 +2290,10 @@
         const target = e.target.closest('button, div[role="menuitem"]');
         if (target) {
             const text = target.innerText.toLowerCase();
-            const keywords = ['удалить из недавних', 'remove from recent', 'hide character'];
+            const keywords = ['удалить из недавних', 'remove from recent', 'hide character', 'hide chat'];
             if (keywords.some(k => text.includes(k))) {
                 lastManualDeleteTime = Date.now();
-                caiLog('Перехвачен клик ручного скрытия (hide character)', 'action');
+                caiLog(t('log_manual_hide_intercepted'), 'action');
             }
         }
     }, true);
@@ -2019,9 +2301,8 @@
     // ===================== ЗАПУСК =====================
     function start() {
         if (document.body) {
-            caiLog('C.AI Chat Archive v15.0 загружен', 'action');
+            caiLog(t('log_script_loaded'), 'action');
 
-            // Устанавливаем перехват сети как можно раньше
             installNetworkInterceptor();
 
             initDebugConsole();
@@ -2042,7 +2323,6 @@
                 if (!document.hidden && !isDomStale) setTimeout(scanChats, 500);
             });
 
-            // Инициализация адблока при запуске
             if (getData(KEY_SETTING_ADBLOCK)) {
                 applyAdBlock();
             }
